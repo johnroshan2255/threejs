@@ -16,6 +16,12 @@ export const GRASS_BLADES_PER_CHUNK = 300_000;
 /** Manhattan radius for lush grass chunks (1 = 3×3 around player). */
 export const GRASS_VIEW_RADIUS = 1;
 
+/** Only a few simple bushes per grass chunk. */
+export const BUSHES_PER_CHUNK = 3;
+
+/** Same ring as grass so bushes appear where you drive. */
+export const BUSH_VIEW_RADIUS = 1;
+
 export function chunkKey(chunkX: number, chunkZ: number): string {
   return `${chunkX},${chunkZ}`;
 }

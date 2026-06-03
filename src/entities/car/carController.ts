@@ -1,7 +1,7 @@
 import type { DynamicRayCastVehicleController } from '@dimforge/rapier3d-compat';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { CAR_CONFIG } from './carConfig';
-import { getCarGroundForward } from './cameraDrive';
+import { getCarForward3D, getCarGroundForward } from './cameraDrive';
 
 export type DriveInput = {
   throttle: number;
@@ -93,27 +93,37 @@ export class CarController {
     return -Math.sign(this.throttle) * mag;
   }
 
-  /** Horizontal push along car nose — never use pitched 3D forward (caused W to go backward). */
+  /** Ground-forward XZ for stable W/S; limited Y uphill via hillAssistY. */
   private applyCarDrive() {
     if (this.throttle === 0 || this.braking) return;
 
     const { drive } = CAR_CONFIG;
-    const fwd = getCarGroundForward(this.body);
+    const groundFwd = getCarGroundForward(this.body);
+    const carFwd = getCarForward3D(this.body);
     const v = this.body.linvel();
-    const forwardSpeed = v.x * fwd.x + v.z * fwd.z;
+    const forwardSpeed = v.x * groundFwd.x + v.z * groundFwd.z;
     const wantForward = this.throttle > 0;
 
     if (wantForward && forwardSpeed >= drive.maxSpeed) return;
     if (!wantForward && forwardSpeed <= -drive.maxSpeed) return;
 
-    _driveDir.x = fwd.x * Math.sign(this.throttle);
-    _driveDir.y = 0;
-    _driveDir.z = fwd.z * Math.sign(this.throttle);
+    const sign = Math.sign(this.throttle);
+    const uphill = Math.max(0, carFwd.y * sign);
+
+    _driveDir.x = groundFwd.x * sign;
+    _driveDir.y = carFwd.y * sign * drive.hillAssistY;
+    _driveDir.z = groundFwd.z * sign;
+
+    const len = Math.hypot(_driveDir.x, _driveDir.y, _driveDir.z) || 1;
+    _driveDir.x /= len;
+    _driveDir.y /= len;
+    _driveDir.z /= len;
 
     const speedAlong = wantForward ? Math.max(0, forwardSpeed) : Math.max(0, -forwardSpeed);
     const gap = Math.max(0.55, 1 - speedAlong / drive.targetSpeed);
+    const climb = 1 + uphill * (drive.climbBoost - 1);
 
-    let impulse = this.body.mass() * drive.moveImpulse * gap;
+    let impulse = this.body.mass() * drive.moveImpulse * gap * climb;
     if (wantForward && forwardSpeed < 0) {
       impulse *= 2;
     }
@@ -121,7 +131,7 @@ export class CarController {
     this.body.applyImpulse(
       {
         x: _driveDir.x * impulse,
-        y: 0,
+        y: _driveDir.y * impulse,
         z: _driveDir.z * impulse,
       },
       true

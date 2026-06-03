@@ -39,6 +39,10 @@ export function createGrassMaterial(): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({
     color: 0x4f9d3a,
     side: THREE.DoubleSide,
+    // Bias depth so grass loses against car/wheels at overlapping pixels (z-fighting).
+    polygonOffset: true,
+    polygonOffsetFactor: 2,
+    polygonOffsetUnits: 8,
   });
   applyGrassWind(material);
   return material;

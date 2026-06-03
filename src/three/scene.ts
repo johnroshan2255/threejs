@@ -24,7 +24,7 @@ export function createScene(): {
   }
 
   scene.add(car.mesh);
-  car.wheels.forEach((w: THREE.Mesh) => scene.add(w));
+  car.wheels.forEach((w) => scene.add(w));
 
   return { scene, fog, chunkManager, car };
 }

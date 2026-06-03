@@ -13,11 +13,8 @@ import { updateDrivingFog } from './sceneFog';
 const _chassisQuat = new THREE.Quaternion();
 const _wheelSteerQuat = new THREE.Quaternion();
 const _wheelSpinQuat = new THREE.Quaternion();
-const _baseWheelQuat = new THREE.Quaternion().setFromEuler(
-  new THREE.Euler(0, 0, Math.PI / 2)
-);
-const _yAxis = new THREE.Vector3(0, 1, 0);
-const _xAxis = new THREE.Vector3(1, 0, 0);
+const _steerAxis = new THREE.Vector3(0, 1, 0);
+const _spinAxis = new THREE.Vector3(1, 0, 0);
 const _wheelLocal = new THREE.Vector3();
 
 function syncCar(car: CarEntity) {
@@ -56,14 +53,15 @@ function syncCar(car: CarEntity) {
     const steering = isFront ? frontSteer : 0;
     const spin = vehicle.wheelRotation(i) ?? 0;
 
-    _wheelSteerQuat.setFromAxisAngle(_yAxis, steering);
-    _wheelSpinQuat.setFromAxisAngle(_xAxis, spin);
+    // Steer around chassis Y, spin around chassis X (Rapier axle). Mesh is already
+    // oriented on X via tire.rotation.z — do not add an extra Z-90 (that stood wheels up).
+    _wheelSteerQuat.setFromAxisAngle(_steerAxis, steering);
+    _wheelSpinQuat.setFromAxisAngle(_spinAxis, spin);
 
     wheel.quaternion
       .copy(_chassisQuat)
       .multiply(_wheelSteerQuat)
-      .multiply(_wheelSpinQuat)
-      .multiply(_baseWheelQuat);
+      .multiply(_wheelSpinQuat);
   });
 }
 

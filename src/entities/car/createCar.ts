@@ -9,11 +9,67 @@ export type CarEntity = {
   body: RAPIER.RigidBody;
   collider: RAPIER.Collider;
   mesh: THREE.Mesh;
-  wheels: THREE.Mesh[];
+  wheels: THREE.Group[];
   vehicle: DynamicRayCastVehicleController;
   frontWheelIndices: number[];
   rearWheelIndices: number[];
 };
+
+function createWheelMesh(radius: number, width: number): THREE.Group {
+  const wheel = new THREE.Group();
+
+  const tireMat = new THREE.MeshStandardMaterial({
+    color: 0x151515,
+    roughness: 0.95,
+  });
+  const rimMat = new THREE.MeshStandardMaterial({
+    color: 0xb8b8b8,
+    metalness: 0.55,
+    roughness: 0.4,
+  });
+  const spokeMat = new THREE.MeshStandardMaterial({
+    color: 0xe8e8e8,
+    metalness: 0.7,
+    roughness: 0.3,
+  });
+
+  const tire = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, width, 20),
+    tireMat
+  );
+  tire.rotation.z = Math.PI / 2;
+  tire.castShadow = true;
+  tire.receiveShadow = true;
+
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(radius * 0.62, radius * 0.07, 10, 24),
+    rimMat
+  );
+  rim.rotation.y = Math.PI / 2;
+  rim.castShadow = true;
+
+  const hub = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius * 0.22, radius * 0.22, width * 1.02, 12),
+    rimMat
+  );
+  hub.rotation.z = Math.PI / 2;
+
+  wheel.add(tire, rim, hub);
+
+  const spokeCount = 5;
+  for (let i = 0; i < spokeCount; i++) {
+    const spoke = new THREE.Mesh(
+      new THREE.BoxGeometry(width * 0.12, radius * 0.5, radius * 0.05),
+      spokeMat
+    );
+    const angle = (i / spokeCount) * Math.PI * 2;
+    spoke.position.set(0, Math.cos(angle) * radius * 0.32, Math.sin(angle) * radius * 0.32);
+    spoke.rotation.x = angle;
+    wheel.add(spoke);
+  }
+
+  return wheel;
+}
 
 export function createCar(): CarEntity {
   const world = getWorld();
@@ -76,7 +132,7 @@ export function createCar(): CarEntity {
     vehicle.setWheelSuspensionCompression(index, suspension.compression);
     vehicle.setWheelSuspensionRelaxation(index, suspension.relaxation);
     vehicle.setWheelMaxSuspensionForce(index, suspension.maxForce);
-    vehicle.setWheelFrictionSlip(index, 8);
+    vehicle.setWheelFrictionSlip(index, 10);
     vehicle.setWheelSideFrictionStiffness(index, 0.8);
   }
 
@@ -92,22 +148,12 @@ export function createCar(): CarEntity {
   );
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-
-  const wheelGeo = new THREE.CylinderGeometry(
-    wheelRadius,
-    wheelRadius,
-    wheelWidth,
-    16
-  );
-
-  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+  mesh.renderOrder = 5;
 
   const wheels = Array.from({ length: 4 }).map(() => {
-    const w = new THREE.Mesh(wheelGeo, wheelMat);
-    w.rotation.z = Math.PI / 2;
-    w.castShadow = true;
-    w.receiveShadow = true;
-    return w;
+    const wheel = createWheelMesh(wheelRadius, wheelWidth);
+    wheel.renderOrder = 5;
+    return wheel;
   });
 
   return {
