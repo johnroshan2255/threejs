@@ -1,10 +1,14 @@
 import * as THREE from 'three';
-import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { PhysicsObject } from '../physics/physics';
+import type { PerspectiveCamera } from 'three';
+import type { WebGLRenderer } from 'three';
 import { getWorld } from '../physics/world';
 import type { CarEntity } from '../entities/car/createCar';
 import { CarController } from '../entities/car/carController';
 import { CarInput } from '../entities/car/carInput';
+import type { ChunkManager } from '../terrain/chunkManager';
+import { updateChaseCamera } from './chaseCamera';
+import { ChaseCameraInput } from './chaseCameraInput';
+import { updateDrivingFog } from './sceneFog';
 
 const _chassisQuat = new THREE.Quaternion();
 const _wheelSteerQuat = new THREE.Quaternion();
@@ -63,8 +67,8 @@ function syncCar(car: CarEntity) {
   });
 }
 
-function updateGrassWind(grass: PhysicsObject, car: CarEntity) {
-  const material = grass.mesh.material as THREE.MeshStandardMaterial;
+function updateGrassWind(chunkManager: ChunkManager, car: CarEntity) {
+  const material = chunkManager.grassMaterial;
   const shader = material.userData.shader as
     | { uniforms: { time: { value: number }; ballPosition: { value: THREE.Vector3 } } }
     | undefined;
@@ -77,11 +81,10 @@ function updateGrassWind(grass: PhysicsObject, car: CarEntity) {
 
 export function startAnimationLoop(
   scene: THREE.Scene,
-  camera: THREE.PerspectiveCamera,
-  renderer: THREE.WebGLRenderer,
-  controls: OrbitControls,
-  grass: PhysicsObject,
-  _terrain: unknown,
+  camera: PerspectiveCamera,
+  renderer: WebGLRenderer,
+  fog: THREE.Fog,
+  chunkManager: ChunkManager,
   car: CarEntity
 ) {
   const world = getWorld();
@@ -94,16 +97,26 @@ export function startAnimationLoop(
     car.rearWheelIndices
   );
   const input = new CarInput(controller);
+  const cameraInput = new ChaseCameraInput(renderer.domElement);
 
   function animate() {
     requestAnimationFrame(animate);
 
-    input.update(world.timestep);
-    world.step();
-    syncCar(car);
-    updateGrassWind(grass, car);
+    const dt = world.timestep;
 
-    controls.update();
+    input.applyInput(dt);
+    world.step();
+    input.afterPhysics(dt);
+    syncCar(car);
+
+    const pos = car.body.translation();
+    const vel = car.body.linvel();
+
+    chunkManager.update(pos.x, pos.z, vel.x, vel.z);
+    updateGrassWind(chunkManager, car);
+    updateDrivingFog(fog, car);
+    updateChaseCamera(camera, car, cameraInput, dt);
+
     renderer.render(scene, camera);
   }
 

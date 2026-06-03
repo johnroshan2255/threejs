@@ -40,8 +40,8 @@ export function createCar(): CarEntity {
   const body = world.createRigidBody(
     RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(spawn.x, spawnY, spawn.z)
-      .setLinearDamping(0.15)
-      .setAngularDamping(0.3)
+      .setLinearDamping(0.1)
+      .setAngularDamping(0.25)
       .setCcdEnabled(true)
   );
 
@@ -76,7 +76,7 @@ export function createCar(): CarEntity {
     vehicle.setWheelSuspensionCompression(index, suspension.compression);
     vehicle.setWheelSuspensionRelaxation(index, suspension.relaxation);
     vehicle.setWheelMaxSuspensionForce(index, suspension.maxForce);
-    vehicle.setWheelFrictionSlip(index, 6);
+    vehicle.setWheelFrictionSlip(index, 8);
     vehicle.setWheelSideFrictionStiffness(index, 0.8);
   }
 

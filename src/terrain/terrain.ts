@@ -1,11 +1,16 @@
+/**
+ * Legacy single-patch terrain — use ChunkManager for the infinite world.
+ * @deprecated
+ */
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { PhysicsObject } from '../physics/physics';
 import { grassTexture } from '../three/textures';
+import { CHUNK_SIZE } from './chunkConfig';
 import { getTerrainHeight, TERRAIN_BASE_Y } from './terrainHeight';
 import { getWorld } from '../physics/world';
 
-export const TERRAIN_SIZE = 25;
+export const TERRAIN_SIZE = CHUNK_SIZE;
 const TERRAIN_SEGMENTS = 100;
 
 export function createTerrain(): PhysicsObject {

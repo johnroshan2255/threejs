@@ -1,6 +1,8 @@
 import { CarController } from './carController';
 import type { DriveInput } from './carController';
 
+const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space']);
+
 export class CarInput {
   private keys = {
     w: false,
@@ -11,9 +13,31 @@ export class CarInput {
   };
 
   constructor(private controller: CarController) {
-    window.addEventListener('keydown', (e) => this.set(e, true));
-    window.addEventListener('keyup', (e) => this.set(e, false));
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('blur', this.clearKeys);
   }
+
+  private onKeyDown = (e: KeyboardEvent) => {
+    if (!GAME_KEYS.has(e.code)) return;
+    e.preventDefault();
+    if (e.repeat) return;
+    this.set(e, true);
+  };
+
+  private onKeyUp = (e: KeyboardEvent) => {
+    if (!GAME_KEYS.has(e.code)) return;
+    e.preventDefault();
+    this.set(e, false);
+  };
+
+  private clearKeys = () => {
+    this.keys.w = false;
+    this.keys.s = false;
+    this.keys.a = false;
+    this.keys.d = false;
+    this.keys.space = false;
+  };
 
   private set(e: KeyboardEvent, val: boolean) {
     switch (e.code) {
@@ -35,7 +59,7 @@ export class CarInput {
     }
   }
 
-  update(dt: number) {
+  applyInput(dt: number) {
     let throttle = 0;
     if (this.keys.w) throttle += 1;
     if (this.keys.s) throttle -= 1;
@@ -50,6 +74,10 @@ export class CarInput {
       braking: this.keys.space,
     };
 
-    this.controller.update(dt, input);
+    this.controller.applyInput(dt, input);
+  }
+
+  afterPhysics(dt: number) {
+    this.controller.afterPhysics(dt);
   }
 }

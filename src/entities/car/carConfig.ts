@@ -31,15 +31,14 @@ export const CAR_CONFIG = {
   },
 
   drive: {
-    engineForce: 90,
-    reverseForce: 65,
-    frontDriveRatio: 0.25,
-    brakeForce: 12,
-    maxSteerAngle: 0.38,
+    engineForce: 175,
+    reverseForce: 125,
+    frontDriveRatio: 0.55,
+    brakeForce: 16,
+    maxSteerAngle: 0.5,
     steerSmoothing: 10,
-    targetSpeed: 2.5,
-    maxSpeed: 3,
-    moveImpulse: 0.14,
-    climbBoost: 4,
+    targetSpeed: 8,
+    maxSpeed: 12,
+    moveImpulse: 0.26,
   },
 };
