@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { PhysicsObject } from '../../physics/physics';
 import { applyGrassWind } from '../../shaders/grassWind';
+import { ChunkGrassCrushMap } from '../../terrain/grassCrushMap';
 import {
   CHUNK_SIZE,
   GRASS_BLADES_PER_CHUNK,
@@ -35,16 +36,17 @@ function getBladeGeometry(): THREE.BufferGeometry {
   return geometry;
 }
 
-export function createGrassMaterial(): THREE.MeshStandardMaterial {
+export function createGrassMaterialForChunk(
+  crushMap: ChunkGrassCrushMap
+): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({
     color: 0x4f9d3a,
     side: THREE.DoubleSide,
-    // Bias depth so grass loses against car/wheels at overlapping pixels (z-fighting).
     polygonOffset: true,
     polygonOffsetFactor: 2,
     polygonOffsetUnits: 8,
   });
-  applyGrassWind(material);
+  applyGrassWind(material, crushMap);
   return material;
 }
 
@@ -96,7 +98,8 @@ export function disposeGrassMesh(grass: THREE.InstancedMesh): void {
 }
 
 export function createGrass(): PhysicsObject {
-  const material = createGrassMaterial();
+  const crushMap = new ChunkGrassCrushMap(0, 0);
+  const material = createGrassMaterialForChunk(crushMap);
   const grass = createGrassForChunk(0, 0, material);
 
   return {

@@ -65,16 +65,23 @@ function syncCar(car: CarEntity) {
   });
 }
 
-function updateGrassWind(chunkManager: ChunkManager, car: CarEntity) {
-  const material = chunkManager.grassMaterial;
-  const shader = material.userData.shader as
-    | { uniforms: { time: { value: number }; ballPosition: { value: THREE.Vector3 } } }
-    | undefined;
+const _wheelWorldPos = [
+  new THREE.Vector3(),
+  new THREE.Vector3(),
+  new THREE.Vector3(),
+  new THREE.Vector3(),
+];
 
-  if (!shader) return;
-
-  shader.uniforms.time.value = performance.now() * 0.001;
-  shader.uniforms.ballPosition.value.copy(car.mesh.position);
+function updateGrassEffects(
+  chunkManager: ChunkManager,
+  car: CarEntity,
+  timeSec: number
+) {
+  car.wheels.forEach((wheel, i) => {
+    _wheelWorldPos[i]?.copy(wheel.position);
+  });
+  chunkManager.stampGrassCrush(_wheelWorldPos, timeSec);
+  chunkManager.updateGrassShaders(car.mesh.position, timeSec);
 }
 
 export function startAnimationLoop(
@@ -111,7 +118,7 @@ export function startAnimationLoop(
     const vel = car.body.linvel();
 
     chunkManager.update(pos.x, pos.z, vel.x, vel.z);
-    updateGrassWind(chunkManager, car);
+    updateGrassEffects(chunkManager, car, performance.now() * 0.001);
     updateDrivingFog(fog, car);
     updateChaseCamera(camera, car, cameraInput, dt);
 

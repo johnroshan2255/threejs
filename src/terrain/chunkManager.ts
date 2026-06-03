@@ -6,9 +6,10 @@ import {
 } from '../three/meshes/bushes';
 import {
   createGrassForChunk,
-  createGrassMaterial,
+  createGrassMaterialForChunk,
   disposeGrassMesh,
 } from '../three/meshes/grass';
+import { updateGrassShaderUniforms } from '../shaders/grassWind';
 import { getNeededTerrainChunks } from './chunkQueries';
 import {
   chunkKey,
@@ -18,6 +19,10 @@ import {
   worldToChunk,
 } from './chunkConfig';
 import {
+  ChunkGrassCrushMap,
+  GRASS_CRUSH_STAMP_RADIUS,
+} from './grassCrushMap';
+import {
   createTerrainChunk,
   disposeTerrainChunk,
   type TerrainChunk,
@@ -26,16 +31,16 @@ import {
 type LoadedChunk = {
   terrain: TerrainChunk;
   grass: THREE.InstancedMesh | null;
+  grassMaterial: THREE.MeshStandardMaterial | null;
   bushes: THREE.InstancedMesh | null;
 };
 
 export class ChunkManager {
   private chunks = new Map<string, LoadedChunk>();
-  readonly grassMaterial: THREE.MeshStandardMaterial;
+  private crushMaps = new Map<string, ChunkGrassCrushMap>();
   readonly bushMaterial: THREE.MeshStandardMaterial;
 
   constructor(private scene: THREE.Scene) {
-    this.grassMaterial = createGrassMaterial();
     this.bushMaterial = createBushMaterial();
   }
 
@@ -81,13 +86,65 @@ export class ChunkManager {
     this.update(worldX, worldZ, 0, 0);
   }
 
+  /** Record tire paths; grass stays hidden until recover timer in shader. */
+  stampGrassCrush(wheelPositions: THREE.Vector3[], timeSec: number): void {
+    const dirty = new Set<string>();
+
+    for (const wheel of wheelPositions) {
+      const { chunkX, chunkZ } = worldToChunk(wheel.x, wheel.z);
+
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const cx = chunkX + dx;
+          const cz = chunkZ + dz;
+          const key = chunkKey(cx, cz);
+          if (!this.chunks.has(key)) continue;
+
+          this.getOrCreateCrushMap(cx, cz).stamp(
+            wheel.x,
+            wheel.z,
+            GRASS_CRUSH_STAMP_RADIUS,
+            timeSec
+          );
+          dirty.add(key);
+        }
+      }
+    }
+
+    for (const key of dirty) {
+      this.crushMaps.get(key)?.flush();
+    }
+  }
+
+  updateGrassShaders(carCenter: THREE.Vector3, timeSec: number): void {
+    for (const chunk of this.chunks.values()) {
+      if (!chunk.grassMaterial) continue;
+      updateGrassShaderUniforms(chunk.grassMaterial, carCenter, timeSec);
+    }
+  }
+
+  private getOrCreateCrushMap(chunkX: number, chunkZ: number): ChunkGrassCrushMap {
+    const key = chunkKey(chunkX, chunkZ);
+    let map = this.crushMaps.get(key);
+    if (!map) {
+      map = new ChunkGrassCrushMap(chunkX, chunkZ);
+      this.crushMaps.set(key, map);
+    }
+    return map;
+  }
+
   private ensureTerrain(chunkX: number, chunkZ: number): void {
     const key = chunkKey(chunkX, chunkZ);
     if (this.chunks.has(key)) return;
 
     const terrain = createTerrainChunk(chunkX, chunkZ);
     this.scene.add(terrain.mesh);
-    this.chunks.set(key, { terrain, grass: null, bushes: null });
+    this.chunks.set(key, {
+      terrain,
+      grass: null,
+      grassMaterial: null,
+      bushes: null,
+    });
   }
 
   private ensureBushes(chunkX: number, chunkZ: number): void {
@@ -117,10 +174,13 @@ export class ChunkManager {
     const chunk = this.chunks.get(key);
     if (!chunk || chunk.grass) return;
 
-    const grass = createGrassForChunk(chunkX, chunkZ, this.grassMaterial);
+    const crushMap = this.getOrCreateCrushMap(chunkX, chunkZ);
+    const material = createGrassMaterialForChunk(crushMap);
+    const grass = createGrassForChunk(chunkX, chunkZ, material);
     grass.renderOrder = 0;
     this.scene.add(grass);
     chunk.grass = grass;
+    chunk.grassMaterial = material;
 
     this.ensureBushes(chunkX, chunkZ);
   }
@@ -130,6 +190,8 @@ export class ChunkManager {
     if (!chunk?.grass) return;
     disposeGrassMesh(chunk.grass);
     chunk.grass = null;
+    chunk.grassMaterial?.dispose();
+    chunk.grassMaterial = null;
   }
 
   private unloadChunk(key: string, chunk: LoadedChunk): void {
@@ -139,10 +201,15 @@ export class ChunkManager {
     if (chunk.grass) {
       disposeGrassMesh(chunk.grass);
     }
+    chunk.grassMaterial?.dispose();
+
     if (chunk.bushes) {
       disposeBushesMesh(chunk.bushes);
     }
 
+    const crush = this.crushMaps.get(key);
+    crush?.dispose();
+    this.crushMaps.delete(key);
     this.chunks.delete(key);
   }
 
@@ -150,7 +217,10 @@ export class ChunkManager {
     for (const [key, chunk] of this.chunks) {
       this.unloadChunk(key, chunk);
     }
-    this.grassMaterial.dispose();
+    for (const crush of this.crushMaps.values()) {
+      crush.dispose();
+    }
+    this.crushMaps.clear();
     this.bushMaterial.dispose();
   }
 }
