@@ -4,82 +4,25 @@ import type { DynamicRayCastVehicleController } from '@dimforge/rapier3d-compat'
 import { getWorldTerrainY } from '../../terrain/terrainHeight';
 import { getWorld } from '../../physics/world';
 import { CAR_CONFIG } from './carConfig';
+import { loadKenneySuvVisual } from './kenneyCarVisual';
 
 export type CarEntity = {
   body: RAPIER.RigidBody;
   collider: RAPIER.Collider;
-  mesh: THREE.Mesh;
+  mesh: THREE.Group;
   wheels: THREE.Group[];
   vehicle: DynamicRayCastVehicleController;
-  frontWheelIndices: number[];
-  rearWheelIndices: number[];
+  driveFrontAxleIndices: number[];
+  driveRearAxleIndices: number[];
+  steeringWheelIndices: number[];
 };
 
-function createWheelMesh(radius: number, width: number): THREE.Group {
-  const wheel = new THREE.Group();
-
-  const tireMat = new THREE.MeshStandardMaterial({
-    color: 0x151515,
-    roughness: 0.95,
-  });
-  const rimMat = new THREE.MeshStandardMaterial({
-    color: 0xb8b8b8,
-    metalness: 0.55,
-    roughness: 0.4,
-  });
-  const spokeMat = new THREE.MeshStandardMaterial({
-    color: 0xe8e8e8,
-    metalness: 0.7,
-    roughness: 0.3,
-  });
-
-  const tire = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius, radius, width, 20),
-    tireMat
-  );
-  tire.rotation.z = Math.PI / 2;
-  tire.castShadow = true;
-  tire.receiveShadow = true;
-
-  const rim = new THREE.Mesh(
-    new THREE.TorusGeometry(radius * 0.62, radius * 0.07, 10, 24),
-    rimMat
-  );
-  rim.rotation.y = Math.PI / 2;
-  rim.castShadow = true;
-
-  const hub = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius * 0.22, radius * 0.22, width * 1.02, 12),
-    rimMat
-  );
-  hub.rotation.z = Math.PI / 2;
-
-  wheel.add(tire, rim, hub);
-
-  const spokeCount = 5;
-  for (let i = 0; i < spokeCount; i++) {
-    const spoke = new THREE.Mesh(
-      new THREE.BoxGeometry(width * 0.12, radius * 0.5, radius * 0.05),
-      spokeMat
-    );
-    const angle = (i / spokeCount) * Math.PI * 2;
-    spoke.position.set(0, Math.cos(angle) * radius * 0.32, Math.sin(angle) * radius * 0.32);
-    spoke.rotation.x = angle;
-    wheel.add(spoke);
-  }
-
-  return wheel;
-}
-
-export function createCar(): CarEntity {
+export async function createCar(): Promise<CarEntity> {
   const world = getWorld();
   const {
-    chassisSize,
-    wheelRadius,
-    wheelWidth,
-    wheelPositions,
-    frontWheelIndices,
-    rearWheelIndices,
+    driveFrontAxleIndices,
+    driveRearAxleIndices,
+    steeringWheelIndices,
     spawn,
     colliderYOffset,
     colliderRoundness,
@@ -87,11 +30,16 @@ export function createCar(): CarEntity {
     suspension,
   } = CAR_CONFIG;
 
+  const layout = await loadKenneySuvVisual(colliderYOffset);
+  const { chassisSize, physicsWheelPositions, wheelRadius } = layout;
+
   const spawnY = getWorldTerrainY(spawn.x, spawn.z) + spawn.clearance;
 
   const hx = chassisSize.x / 2;
   const hy = chassisSize.y / 2;
   const hz = chassisSize.z / 2;
+  // Shorter collider so the body box doesn't sit on the ground instead of the tires.
+  const colliderHy = hy * 0.82;
 
   const body = world.createRigidBody(
     RAPIER.RigidBodyDesc.dynamic()
@@ -102,8 +50,8 @@ export function createCar(): CarEntity {
   );
 
   const collider = world.createCollider(
-    RAPIER.ColliderDesc.roundCuboid(hx, hy, hz, colliderRoundness)
-      .setTranslation(0, colliderYOffset, 0)
+    RAPIER.ColliderDesc.roundCuboid(hx, colliderHy, hz, colliderRoundness)
+      .setTranslation(0, colliderYOffset + hy * 0.12, 0)
       .setFriction(0.35)
       .setRestitution(0)
       .setMass(mass),
@@ -112,13 +60,12 @@ export function createCar(): CarEntity {
 
   const vehicle = world.createVehicleController(body);
   vehicle.indexUpAxis = 1;
-  // Setter is literally named setIndexForwardAxis in Rapier's API.
   vehicle.setIndexForwardAxis = 2;
 
   const suspensionDirection = { x: 0, y: -1, z: 0 };
   const axleDirection = { x: 1, y: 0, z: 0 };
 
-  for (const [index, position] of wheelPositions.entries()) {
+  for (const [index, position] of physicsWheelPositions.entries()) {
     vehicle.addWheel(
       { x: position[0], y: position[1], z: position[2] },
       suspensionDirection,
@@ -132,26 +79,32 @@ export function createCar(): CarEntity {
     vehicle.setWheelSuspensionCompression(index, suspension.compression);
     vehicle.setWheelSuspensionRelaxation(index, suspension.relaxation);
     vehicle.setWheelMaxSuspensionForce(index, suspension.maxForce);
-    vehicle.setWheelFrictionSlip(index, 10);
+    vehicle.setWheelFrictionSlip(index, 12);
     vehicle.setWheelSideFrictionStiffness(index, 0.8);
   }
 
-  // Let suspension settle on terrain before driving.
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 90; i++) {
     vehicle.updateVehicle(1 / 60);
     world.step();
   }
 
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(chassisSize.x, chassisSize.y, chassisSize.z),
-    new THREE.MeshStandardMaterial({ color: 0xff0000 })
-  );
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  mesh.renderOrder = 5;
-
-  const wheels = Array.from({ length: 4 }).map(() => {
-    const wheel = createWheelMesh(wheelRadius, wheelWidth);
+  const wheels = physicsWheelPositions.map((pos) => {
+    const wheel = layout.wheelTemplate.clone(true);
+    // Kenney rim is on +X; mirror wheels on -X so hubs face outward (not into the body).
+    if (pos[0] < 0) {
+      wheel.scale.x = -Math.abs(wheel.scale.x);
+    }
+    wheel.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      child.castShadow = true;
+      child.receiveShadow = true;
+      const mats = Array.isArray(child.material)
+        ? child.material
+        : [child.material];
+      for (const mat of mats) {
+        if (mat) mat.side = THREE.DoubleSide;
+      }
+    });
     wheel.renderOrder = 5;
     return wheel;
   });
@@ -159,10 +112,11 @@ export function createCar(): CarEntity {
   return {
     body,
     collider,
-    mesh,
+    mesh: layout.body,
     wheels,
     vehicle,
-    frontWheelIndices,
-    rearWheelIndices,
+    driveFrontAxleIndices,
+    driveRearAxleIndices,
+    steeringWheelIndices,
   };
 }

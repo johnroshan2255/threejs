@@ -5,6 +5,7 @@ import {
   CHUNK_SIZE,
   chunkWorldCenter,
 } from '../../terrain/chunkConfig';
+import { hasGrass } from '../../terrain/fieldMask';
 import { getWorldTerrainY } from '../../terrain/terrainHeight';
 
 const FIELD_SIZE = CHUNK_SIZE;
@@ -76,21 +77,33 @@ export function createBushesForChunk(
   const { x: centerX, z: centerZ } = chunkWorldCenter(chunkX, chunkZ);
   const dummy = new THREE.Object3D();
 
+  let placed = 0;
+
   for (let i = 0; i < BUSHES_PER_CHUNK; i++) {
-    const x = centerX + (hash01(chunkX, chunkZ, i, 1) - 0.5) * FIELD_SIZE * 0.85;
-    const z = centerZ + (hash01(chunkX, chunkZ, i, 2) - 0.5) * FIELD_SIZE * 0.85;
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const x =
+        centerX +
+        (hash01(chunkX, chunkZ, i, 1 + attempt) - 0.5) * FIELD_SIZE * 0.85;
+      const z =
+        centerZ +
+        (hash01(chunkX, chunkZ, i, 2 + attempt) - 0.5) * FIELD_SIZE * 0.85;
 
-    const scale = 1.05 + hash01(chunkX, chunkZ, i, 3) * 0.85;
+      if (!hasGrass(x, z)) continue;
 
-    dummy.position.set(x, getWorldTerrainY(x, z), z);
-    dummy.rotation.y = hash01(chunkX, chunkZ, i, 4) * Math.PI * 2;
-    dummy.scale.set(scale, scale, scale);
-    dummy.updateMatrix();
-    bushes.setMatrixAt(i, dummy.matrix);
+      const scale = 1.05 + hash01(chunkX, chunkZ, i, 3) * 0.85;
+
+      dummy.position.set(x, getWorldTerrainY(x, z), z);
+      dummy.rotation.y = hash01(chunkX, chunkZ, i, 4) * Math.PI * 2;
+      dummy.scale.set(scale, scale, scale);
+      dummy.updateMatrix();
+      bushes.setMatrixAt(placed, dummy.matrix);
+      placed++;
+      break;
+    }
   }
 
   bushes.instanceMatrix.needsUpdate = true;
-  bushes.count = BUSHES_PER_CHUNK;
+  bushes.count = placed;
   bushes.geometry.boundingSphere = new THREE.Sphere(
     new THREE.Vector3(centerX, 2.2, centerZ),
     FIELD_SIZE

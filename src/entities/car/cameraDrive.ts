@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type RAPIER from '@dimforge/rapier3d-compat';
 
-/** Matches chassis layout: front of mesh is -Z. */
+/** Kenney mesh front faces -Z. */
 const _localForward = new THREE.Vector3(0, 0, -1);
 const _worldForward = new THREE.Vector3();
 const _cameraDir = new THREE.Vector3();

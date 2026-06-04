@@ -5,17 +5,32 @@ import { createCamera } from './three/camera';
 import { createRenderer } from './three/renderer';
 import { handleResize } from './three/resize';
 import { createScene } from './three/scene';
-import { FOG_COLOR } from './three/sceneFog';
-
 await initPhysics();
 
 const camera = createCamera();
 const renderer = createRenderer();
-renderer.setClearColor(FOG_COLOR);
 renderer.domElement.style.cursor = 'grab';
 
-const { scene, fog, chunkManager, car } = createScene();
+const { scene, fog, lights, weather, chunkManager, car, beachCoast } =
+  await createScene();
 
-handleResize(camera, renderer);
+weather.apply(scene, fog, lights, renderer, beachCoast, 0, 0, 0);
 
-startAnimationLoop(scene, camera, renderer, fog, chunkManager, car);
+const hint = document.createElement('div');
+hint.id = 'controls-hint';
+hint.textContent = 'WASD · Space brake · R reset · P change weather';
+document.body.appendChild(hint);
+
+handleResize(camera, renderer, weather.rain);
+
+startAnimationLoop(
+  scene,
+  camera,
+  renderer,
+  fog,
+  lights,
+  weather,
+  chunkManager,
+  car,
+  beachCoast
+);

@@ -1,3 +1,5 @@
+import { getBeachInfluence, getBeachSurfaceHeight } from './beach';
+
 function hash2(x: number, z: number): number {
   const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
   return s - Math.floor(s);
@@ -41,12 +43,22 @@ function fbm(x: number, z: number, octaves = 5): number {
 }
 
 /** Height displacement in plane local space (before mesh rotation). */
-export function getTerrainHeight(x: number, z: number): number {
+export function getBaseTerrainHeight(x: number, z: number): number {
   const n = fbm(x, z);
   const hills = n * 4;
   const valleys = Math.pow(Math.abs(n), 1.5) * Math.sign(n) * 0.8;
 
   return hills + valleys;
+}
+
+export function getTerrainHeight(x: number, z: number): number {
+  const worldZ = -z;
+  const base = getBaseTerrainHeight(x, z);
+  const beachW = getBeachInfluence(x);
+  if (beachW <= 0) return base;
+  const beach = getBeachSurfaceHeight(x, worldZ);
+  const flattened = base * (1 - beachW * 0.9);
+  return flattened * (1 - beachW) + beach * beachW;
 }
 
 export const TERRAIN_BASE_Y = -1;
@@ -55,3 +67,4 @@ export const TERRAIN_BASE_Y = -1;
 export function getWorldTerrainY(worldX: number, worldZ: number): number {
   return TERRAIN_BASE_Y + getTerrainHeight(worldX, -worldZ);
 }
+

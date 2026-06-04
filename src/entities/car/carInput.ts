@@ -1,9 +1,19 @@
 import { CarController } from './carController';
 import type { DriveInput } from './carController';
 
-const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space']);
+const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyR']);
 
 export class CarInput {
+  constructor(
+    private controller: CarController,
+    private onReset: () => void,
+    private onFirstInput?: () => void
+  ) {
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('blur', this.clearKeys);
+  }
+
   private keys = {
     w: false,
     s: false,
@@ -12,16 +22,19 @@ export class CarInput {
     space: false,
   };
 
-  constructor(private controller: CarController) {
-    window.addEventListener('keydown', this.onKeyDown);
-    window.addEventListener('keyup', this.onKeyUp);
-    window.addEventListener('blur', this.clearKeys);
-  }
-
   private onKeyDown = (e: KeyboardEvent) => {
+    if (e.code === 'KeyR') {
+      e.preventDefault();
+      if (e.repeat) return;
+      this.clearKeys();
+      this.onReset();
+      return;
+    }
+
     if (!GAME_KEYS.has(e.code)) return;
     e.preventDefault();
     if (e.repeat) return;
+    this.onFirstInput?.();
     this.set(e, true);
   };
 

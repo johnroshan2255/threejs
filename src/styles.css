@@ -16,3 +16,16 @@ canvas {
   touch-action: none;
   user-select: none;
 }
+
+#controls-hint {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  padding: 8px 12px;
+  font: 13px/1.4 system-ui, sans-serif;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 6px;
+  pointer-events: none;
+  user-select: none;
+}

@@ -5,63 +5,48 @@ import { getWorld } from '../physics/world';
 import type { CarEntity } from '../entities/car/createCar';
 import { CarController } from '../entities/car/carController';
 import { CarInput } from '../entities/car/carInput';
+import { resetCarUpright } from '../entities/car/resetCar';
 import type { ChunkManager } from '../terrain/chunkManager';
 import { updateChaseCamera } from './chaseCamera';
 import { ChaseCameraInput } from './chaseCameraInput';
-import { updateDrivingFog } from './sceneFog';
+import type { SceneLights } from './lights';
+import type { WeatherSystem } from './weather/weatherSystem';
+import { WeatherInput } from './weather/weatherInput';
+import type { BeachCoast } from './meshes/beachCoast';
 
-const _chassisQuat = new THREE.Quaternion();
 const _wheelSteerQuat = new THREE.Quaternion();
 const _wheelSpinQuat = new THREE.Quaternion();
 const _steerAxis = new THREE.Vector3(0, 1, 0);
 const _spinAxis = new THREE.Vector3(1, 0, 0);
-const _wheelLocal = new THREE.Vector3();
 
 function syncCar(car: CarEntity) {
   const pos = car.body.translation();
   const rot = car.body.rotation();
 
   car.mesh.position.set(pos.x, pos.y, pos.z);
-  _chassisQuat.set(rot.x, rot.y, rot.z, rot.w);
-  car.mesh.quaternion.copy(_chassisQuat);
+  car.mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w);
 
   const { vehicle } = car;
-
   const frontSteer =
-    vehicle.wheelSteering(car.frontWheelIndices[0]) ?? 0;
+    vehicle.wheelSteering(car.steeringWheelIndices[0]) ?? 0;
 
   car.wheels.forEach((wheel, i) => {
     const connection = vehicle.wheelChassisConnectionPointCs(i);
     const suspension = vehicle.wheelSuspensionLength(i);
-
     if (!connection) return;
 
-    _wheelLocal.set(
+    wheel.position.set(
       connection.x,
       connection.y - (suspension ?? 0),
       connection.z
     );
-    _wheelLocal.applyQuaternion(_chassisQuat);
 
-    wheel.position.set(
-      pos.x + _wheelLocal.x,
-      pos.y + _wheelLocal.y,
-      pos.z + _wheelLocal.z
-    );
-
-    const isFront = car.frontWheelIndices.includes(i);
-    const steering = isFront ? frontSteer : 0;
+    const steering = car.steeringWheelIndices.includes(i) ? frontSteer : 0;
     const spin = vehicle.wheelRotation(i) ?? 0;
 
-    // Steer around chassis Y, spin around chassis X (Rapier axle). Mesh is already
-    // oriented on X via tire.rotation.z — do not add an extra Z-90 (that stood wheels up).
     _wheelSteerQuat.setFromAxisAngle(_steerAxis, steering);
     _wheelSpinQuat.setFromAxisAngle(_spinAxis, spin);
-
-    wheel.quaternion
-      .copy(_chassisQuat)
-      .multiply(_wheelSteerQuat)
-      .multiply(_wheelSpinQuat);
+    wheel.quaternion.copy(_wheelSteerQuat).multiply(_wheelSpinQuat);
   });
 }
 
@@ -75,13 +60,14 @@ const _wheelWorldPos = [
 function updateGrassEffects(
   chunkManager: ChunkManager,
   car: CarEntity,
-  timeSec: number
+  timeSec: number,
+  grassWindScale: number
 ) {
   car.wheels.forEach((wheel, i) => {
-    _wheelWorldPos[i]?.copy(wheel.position);
+    wheel.getWorldPosition(_wheelWorldPos[i]!);
   });
   chunkManager.stampGrassCrush(_wheelWorldPos, timeSec);
-  chunkManager.updateGrassShaders(car.mesh.position, timeSec);
+  chunkManager.updateGrassShaders(car.mesh.position, timeSec, grassWindScale);
 }
 
 export function startAnimationLoop(
@@ -89,8 +75,11 @@ export function startAnimationLoop(
   camera: PerspectiveCamera,
   renderer: WebGLRenderer,
   fog: THREE.Fog,
+  lights: SceneLights,
+  weather: WeatherSystem,
   chunkManager: ChunkManager,
-  car: CarEntity
+  car: CarEntity,
+  beachCoast: BeachCoast
 ) {
   const world = getWorld();
   world.timestep = 1 / 60;
@@ -98,11 +87,20 @@ export function startAnimationLoop(
   const controller = new CarController(
     car.body,
     car.vehicle,
-    car.frontWheelIndices,
-    car.rearWheelIndices
+    car.driveFrontAxleIndices,
+    car.driveRearAxleIndices,
+    car.steeringWheelIndices
   );
-  const input = new CarInput(controller);
+  const input = new CarInput(
+    controller,
+    () => {
+      resetCarUpright(car, controller);
+      syncCar(car);
+    },
+    () => weather.resumeAudio()
+  );
   const cameraInput = new ChaseCameraInput(renderer.domElement);
+  new WeatherInput(weather);
 
   function animate() {
     requestAnimationFrame(animate);
@@ -118,8 +116,22 @@ export function startAnimationLoop(
     const vel = car.body.linvel();
 
     chunkManager.update(pos.x, pos.z, vel.x, vel.z);
-    updateGrassEffects(chunkManager, car, performance.now() * 0.001);
-    updateDrivingFog(fog, car);
+    const timeSec = performance.now() * 0.001;
+
+    weather.update(dt, camera, (x, z, amount) => {
+      chunkManager.addPuddleWater(x, z, amount);
+    });
+    chunkManager.updatePuddles(
+      dt,
+      pos.x,
+      pos.z,
+      weather.getRainIntensity(),
+      weather.getEvaporationRate()
+    );
+    weather.apply(scene, fog, lights, renderer, beachCoast, pos.x, pos.y, pos.z);
+
+    updateGrassEffects(chunkManager, car, timeSec, weather.getGrassWindScale());
+    beachCoast.update(timeSec, pos.z, weather.state.fogColor);
     updateChaseCamera(camera, car, cameraInput, dt);
 
     renderer.render(scene, camera);

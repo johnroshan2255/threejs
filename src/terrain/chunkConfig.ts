@@ -1,26 +1,41 @@
 /** World chunk size (matches original single patch). */
 export const CHUNK_SIZE = 25;
 
-/** Vertices per chunk edge (lower = faster, more chunks visible). */
-export const CHUNK_SEGMENTS = 48;
+/** Vertices per chunk edge (lower = faster). */
+export const CHUNK_SEGMENTS = 32;
 
-/** Terrain chunks to load around the player. */
-export const TERRAIN_VIEW_RADIUS = 3;
+/** Terrain chunks to load around the player (2 → 5×5). */
+export const TERRAIN_VIEW_RADIUS = 2;
 
 /** Keep chunks longer than load radius to avoid visible holes while driving. */
-export const TERRAIN_UNLOAD_RADIUS = 5;
+export const TERRAIN_UNLOAD_RADIUS = 4;
 
-/** Full-density grass (same as original single 25×25 field). */
-export const GRASS_BLADES_PER_CHUNK = 300_000;
+/** Max instanced tuft slots per chunk (only patches of the chunk fill grass). */
+export const GRASS_TUFT_MAX_CAPACITY = 12_000;
 
-/** Manhattan radius for lush grass chunks (1 = 3×3 around player). */
+/** Target tufts to place per chunk inside grass patches. */
+export const GRASS_TARGET_TUFTS = 9_000;
+
+/** Tufts attempted per frame while a chunk is building. */
+export const GRASS_BUILD_BATCH = 2_500;
+
+/** Rocks on bare sand per terrain chunk. */
+export const PROPS_PER_CHUNK = 3;
+
+/** @deprecated */
+export const GRASS_TUFTS_PER_CHUNK = GRASS_TUFT_MAX_CAPACITY;
+
+/** Manhattan radius for 3D grass (1 = 3×3 around player). */
 export const GRASS_VIEW_RADIUS = 1;
 
 /** Only a few simple bushes per grass chunk. */
 export const BUSHES_PER_CHUNK = 3;
 
-/** Same ring as grass so bushes appear where you drive. */
+/** Same ring as grass. */
 export const BUSH_VIEW_RADIUS = 1;
+
+/** @deprecated Use GRASS_TUFTS_PER_CHUNK */
+export const GRASS_BLADES_PER_CHUNK = GRASS_TUFTS_PER_CHUNK;
 
 export function chunkKey(chunkX: number, chunkZ: number): string {
   return `${chunkX},${chunkZ}`;

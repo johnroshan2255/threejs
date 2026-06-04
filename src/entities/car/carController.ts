@@ -1,7 +1,10 @@
 import type { DynamicRayCastVehicleController } from '@dimforge/rapier3d-compat';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { CAR_CONFIG } from './carConfig';
-import { getCarForward3D, getCarGroundForward } from './cameraDrive';
+import {
+  BEACH_WATER_WORLD_Y,
+  getOceanSubmersion,
+} from '../../terrain/beach';
 
 export type DriveInput = {
   throttle: number;
@@ -9,47 +12,56 @@ export type DriveInput = {
   braking: boolean;
 };
 
-const _driveDir = { x: 0, y: 0, z: 0 };
-
 export class CarController {
   private steerAngle = 0;
   private targetSteer = 0;
+  /** Smoothed -1..1, ramps engine force gradually. */
   private throttle = 0;
   private braking = false;
 
   constructor(
     private body: RAPIER.RigidBody,
     private vehicle: DynamicRayCastVehicleController,
-    private frontWheelIndices: number[],
-    private rearWheelIndices: number[]
+    private driveFrontAxleIndices: number[],
+    private driveRearAxleIndices: number[],
+    private steeringWheelIndices: number[]
   ) {}
 
   /** Wheel inputs — call before world.step(). */
   applyInput(dt: number, input: DriveInput) {
-    this.throttle = input.throttle;
     this.braking = input.braking;
 
     const { drive } = CAR_CONFIG;
-    const smooth = 1 - Math.exp(-drive.steerSmoothing * dt);
+    const steerSmooth = 1 - Math.exp(-drive.steerSmoothing * dt);
+    const throttleTarget = input.throttle;
+    const rampingUp =
+      Math.abs(throttleTarget) > Math.abs(this.throttle) + 1e-4 &&
+      Math.sign(throttleTarget || this.throttle) === Math.sign(throttleTarget);
+    const throttleRate = rampingUp
+      ? drive.throttleAccelSmoothing
+      : drive.throttleDecelSmoothing;
+    const throttleSmooth = 1 - Math.exp(-throttleRate * dt);
+    this.throttle += (throttleTarget - this.throttle) * throttleSmooth;
 
     this.targetSteer = input.steer * drive.maxSteerAngle;
-    this.steerAngle += (this.targetSteer - this.steerAngle) * smooth;
+    this.steerAngle += (this.targetSteer - this.steerAngle) * steerSmooth;
 
-    for (const i of this.frontWheelIndices) {
+    for (let i = 0; i < this.vehicle.numWheels(); i++) {
+      this.vehicle.setWheelSteering(i, 0);
+    }
+    for (const i of this.steeringWheelIndices) {
       this.vehicle.setWheelSteering(i, this.steerAngle);
     }
 
-    for (const i of this.rearWheelIndices) {
-      this.vehicle.setWheelSteering(i, 0);
-    }
+    const t = this.body.translation();
+    const water = getOceanSubmersion(t.x, t.y, t.z);
+    const engine = this.computeEngineForce() * (1 - water * 0.72);
 
-    const engine = this.computeEngineForce();
-
-    for (const i of this.rearWheelIndices) {
+    for (const i of this.driveRearAxleIndices) {
       this.vehicle.setWheelEngineForce(i, engine);
     }
 
-    for (const i of this.frontWheelIndices) {
+    for (const i of this.driveFrontAxleIndices) {
       this.vehicle.setWheelEngineForce(i, engine * drive.frontDriveRatio);
     }
 
@@ -59,11 +71,30 @@ export class CarController {
     }
   }
 
-  /** Vehicle + drive assist — call after world.step(). */
-  afterPhysics(_dt: number) {
-    this.vehicle.updateVehicle(_dt);
-    this.applyCarDrive();
+  /** Vehicle update — call after world.step(). */
+  afterPhysics(dt: number) {
+    this.vehicle.updateVehicle(dt);
+    this.applyWaterEffects();
     this.clampSpeed(CAR_CONFIG.drive.maxSpeed);
+  }
+
+  private applyWaterEffects() {
+    const t = this.body.translation();
+    const sub = getOceanSubmersion(t.x, t.y, t.z);
+    if (sub <= 0.03) return;
+
+    const v = this.body.linvel();
+    const drag = 1 - sub * 0.2;
+    this.body.setLinvel(
+      { x: v.x * drag, y: v.y * (1 - sub * 0.25), z: v.z * drag },
+      true
+    );
+
+    const sinkTargetY = BEACH_WATER_WORLD_Y - 0.65 * sub;
+    const pull = (sinkTargetY - t.y) * this.body.mass() * 1.4 * sub;
+    if (pull < 0) {
+      this.body.applyImpulse({ x: 0, y: pull, z: 0 }, true);
+    }
   }
 
   update(dt: number, input: DriveInput) {
@@ -71,71 +102,32 @@ export class CarController {
     this.afterPhysics(dt);
   }
 
-  /**
-   * Rapier engine axis is chassis +Z; mesh front is -Z.
-   * W = negative force, S = positive.
-   */
-  private computeEngineForce(): number {
-    if (this.throttle === 0) return 0;
+  resetDriveState() {
+    this.steerAngle = 0;
+    this.targetSteer = 0;
+    this.throttle = 0;
+    this.braking = false;
 
-    const { engineForce, reverseForce } = CAR_CONFIG.drive;
-    const mag = this.throttle > 0 ? engineForce : reverseForce;
-
-    if (this.throttle > 0) {
-      const fwd = getCarGroundForward(this.body);
-      const v = this.body.linvel();
-      const forwardSpeed = v.x * fwd.x + v.z * fwd.z;
-      if (forwardSpeed < -0.3) {
-        return engineForce * 1.8;
-      }
+    for (let i = 0; i < this.vehicle.numWheels(); i++) {
+      this.vehicle.setWheelSteering(i, 0);
+      this.vehicle.setWheelEngineForce(i, 0);
+      this.vehicle.setWheelBrake(i, 0);
     }
-
-    return -Math.sign(this.throttle) * mag;
   }
 
-  /** Ground-forward XZ for stable W/S; limited Y uphill via hillAssistY. */
-  private applyCarDrive() {
-    if (this.throttle === 0 || this.braking) return;
+  /**
+   * Rapier vehicle forward is +Z; Kenney hood faces -Z.
+   * Negative engine on W drives toward -Z (forward).
+   */
+  private computeEngineForce(): number {
+    if (Math.abs(this.throttle) < 0.02) return 0;
 
-    const { drive } = CAR_CONFIG;
-    const groundFwd = getCarGroundForward(this.body);
-    const carFwd = getCarForward3D(this.body);
-    const v = this.body.linvel();
-    const forwardSpeed = v.x * groundFwd.x + v.z * groundFwd.z;
-    const wantForward = this.throttle > 0;
+    const { engineForce, reverseForce } = CAR_CONFIG.drive;
+    const t = this.throttle;
+    const mag =
+      t > 0 ? engineForce * t : reverseForce * Math.abs(t);
 
-    if (wantForward && forwardSpeed >= drive.maxSpeed) return;
-    if (!wantForward && forwardSpeed <= -drive.maxSpeed) return;
-
-    const sign = Math.sign(this.throttle);
-    const uphill = Math.max(0, carFwd.y * sign);
-
-    _driveDir.x = groundFwd.x * sign;
-    _driveDir.y = carFwd.y * sign * drive.hillAssistY;
-    _driveDir.z = groundFwd.z * sign;
-
-    const len = Math.hypot(_driveDir.x, _driveDir.y, _driveDir.z) || 1;
-    _driveDir.x /= len;
-    _driveDir.y /= len;
-    _driveDir.z /= len;
-
-    const speedAlong = wantForward ? Math.max(0, forwardSpeed) : Math.max(0, -forwardSpeed);
-    const gap = Math.max(0.55, 1 - speedAlong / drive.targetSpeed);
-    const climb = 1 + uphill * (drive.climbBoost - 1);
-
-    let impulse = this.body.mass() * drive.moveImpulse * gap * climb;
-    if (wantForward && forwardSpeed < 0) {
-      impulse *= 2;
-    }
-
-    this.body.applyImpulse(
-      {
-        x: _driveDir.x * impulse,
-        y: _driveDir.y * impulse,
-        z: _driveDir.z * impulse,
-      },
-      true
-    );
+    return -Math.sign(t) * mag;
   }
 
   private clampSpeed(max: number) {

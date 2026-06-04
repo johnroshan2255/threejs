@@ -9,6 +9,7 @@ import { CHUNK_SIZE } from '../terrain/chunkConfig';
 export type GrassShaderUniforms = {
   time: { value: number };
   ballPosition: { value: THREE.Vector3 };
+  grassWindScale: { value: number };
   crushMap: { value: THREE.DataTexture };
   crushMapOrigin: { value: THREE.Vector2 };
   crushMapSize: { value: number };
@@ -22,6 +23,7 @@ export function createGrassShaderUniforms(
   return {
     time: { value: 0 },
     ballPosition: { value: new THREE.Vector3() },
+    grassWindScale: { value: 1 },
     crushMap: { value: crushMap.texture },
     crushMapOrigin: {
       value: new THREE.Vector2(crushMap.originX, crushMap.originZ),
@@ -61,11 +63,10 @@ function grassTrailGlsl(): string {
   `;
 }
 
-export function applyGrassWind(
-  material: THREE.MeshStandardMaterial,
-  crushMap: ChunkGrassCrushMap
-) {
-  material.customProgramCacheKey = () => 'grassWind_v4_trail';
+type GrassMaterial = THREE.MeshLambertMaterial | THREE.MeshStandardMaterial;
+
+export function applyGrassWind(material: GrassMaterial, crushMap: ChunkGrassCrushMap) {
+  material.customProgramCacheKey = () => 'grassWind_v11_weather';
 
   material.onBeforeCompile = (shader) => {
     const uniforms = createGrassShaderUniforms(crushMap);
@@ -80,6 +81,7 @@ export function applyGrassWind(
 
         uniform float time;
         uniform vec3 ballPosition;
+        uniform float grassWindScale;
         uniform sampler2D crushMap;
         uniform vec2 crushMapOrigin;
         uniform float crushMapSize;
@@ -88,6 +90,7 @@ export function applyGrassWind(
 
         varying vec3 vWorldPos;
         varying float vHide;
+        varying float vBladeT;
         ${grassTrailGlsl()}
         `
     );
@@ -100,8 +103,8 @@ export function applyGrassWind(
         float wind =
           sin(time * 3.0 + position.y * 7.0);
 
-        transformed.x += wind * 0.025 * uv.y;
-        transformed.z += wind * 0.02 * uv.y;
+        transformed.x += wind * 0.025 * grassWindScale * uv.y;
+        transformed.z += wind * 0.02 * grassWindScale * uv.y;
 
         vec3 bladePos = vec3(
           instanceMatrix[3][0],
@@ -122,6 +125,10 @@ export function applyGrassWind(
         float trailAge;
         float hide = grassTrailHide(bladePos.xz, trailAge);
         float height = uv.y;
+        float bed = 1.0 - height;
+
+        transformed.x *= 1.0 + bed * bed * 0.5;
+        transformed.z *= 1.0 + bed * bed * 0.5;
 
         transformed.y *= 1.0 - hide * height;
         transformed.x *= 1.0 - hide * 0.15;
@@ -130,6 +137,7 @@ export function applyGrassWind(
         vec4 worldPos = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
         vWorldPos = worldPos.xyz;
         vHide = hide;
+        vBladeT = uv.y;
         `
     );
 
@@ -148,31 +156,59 @@ export function applyGrassWind(
 
         varying vec3 vWorldPos;
         varying float vHide;
+        varying float vBladeT;
         ${grassTrailGlsl()}
+        `
+    );
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <color_fragment>',
+      `
+        float t = clamp(vBladeT, 0.0, 1.0);
+        float tShade = pow(t, 0.28);
+
+        vec3 grassRoot = vec3(0.002, 0.003, 0.002);
+        vec3 grassLow = vec3(0.03, 0.07, 0.04);
+        vec3 grassMid = vec3(0.1, 0.24, 0.09);
+        vec3 grassTip = vec3(0.44, 0.72, 0.26);
+
+        vec3 grassColor = mix(
+          mix(mix(grassRoot, grassLow, smoothstep(0.0, 0.28, tShade)), grassMid, smoothstep(0.15, 0.62, tShade)),
+          grassTip,
+          smoothstep(0.42, 1.0, tShade)
+        );
+
+        diffuseColor = vec4(grassColor, 1.0);
         `
     );
 
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <opaque_fragment>',
       `
-        #include <opaque_fragment>
+        float h = clamp(vBladeT, 0.0, 1.0);
+        float baseShade = mix(0.02, 1.0, pow(h, 0.3));
+        float bedDark = mix(0.015, 1.0, smoothstep(0.0, 0.58, h));
+        outgoingLight *= baseShade * bedDark;
 
         float carShade = smoothstep(2.2, 0.0, distance(vWorldPos.xz, ballPosition.xz));
-        diffuseColor.rgb *= mix(1.0, 0.5, carShade * 0.65);
+        outgoingLight *= mix(1.0, 0.55, carShade * 0.5);
 
         float trailAge;
         float hide = max(vHide, grassTrailHide(vWorldPos.xz, trailAge));
         if (hide > 0.98) discard;
-        diffuseColor.rgb *= 1.0 - hide * 0.4;
+        outgoingLight *= 1.0 - hide * 0.35;
+
+        #include <opaque_fragment>
         `
     );
   };
 }
 
 export function updateGrassShaderUniforms(
-  material: THREE.MeshStandardMaterial,
+  material: GrassMaterial,
   carCenter: THREE.Vector3,
-  timeSec: number
+  timeSec: number,
+  grassWindScale = 1
 ) {
   const shader = material.userData.shader as
     | { uniforms: GrassShaderUniforms }
@@ -180,6 +216,14 @@ export function updateGrassShaderUniforms(
 
   if (!shader) return;
 
+  const crushMap = material.userData.crushMap as ChunkGrassCrushMap | undefined;
+
   shader.uniforms.time.value = timeSec;
   shader.uniforms.ballPosition.value.copy(carCenter);
+  shader.uniforms.grassWindScale.value = grassWindScale;
+
+  if (crushMap) {
+    shader.uniforms.crushMap.value = crushMap.texture;
+    shader.uniforms.crushMapOrigin.value.set(crushMap.originX, crushMap.originZ);
+  }
 }
