@@ -2,6 +2,12 @@ import * as THREE from 'three';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { CAR_CONFIG } from './carConfig';
+import { bindColormapLampGlow } from './carBodyLampGlow';
+import {
+  anchorsToBodySpace,
+  computeCarLightAnchors,
+  type CarLightAnchors,
+} from './lightAnchors';
 
 const MODEL_BASE = '/models/kenney/';
 const COLORMAP_URL = `${MODEL_BASE}Textures/colormap.png`;
@@ -17,7 +23,7 @@ const WHEEL_GROUP_NAMES = [
 /** Slightly wider than mesh hubs so tires don't clip the body. */
 const WHEEL_XZ_SPREAD = 1.04;
 /** Physics hub sits below the decorative wheel center. */
-const WHEEL_PHYSICS_Y_DROP = 0.06;
+const WHEEL_PHYSICS_Y_DROP = 0.16;
 
 const _box = new THREE.Box3();
 const _size = new THREE.Vector3();
@@ -30,6 +36,7 @@ export type KenneyCarLayout = {
   physicsWheelPositions: [number, number, number][];
   wheelRadius: number;
   chassisSize: { x: number; y: number; z: number };
+  lightAnchors: CarLightAnchors;
 };
 
 let colormapPromise: Promise<THREE.Texture> | null = null;
@@ -60,14 +67,15 @@ function applyColormapMaterials(root: THREE.Object3D, colormap: THREE.Texture) {
     child.receiveShadow = true;
 
     const mats = Array.isArray(child.material) ? child.material : [child.material];
-    const next = mats.map(
-      () =>
-        new THREE.MeshStandardMaterial({
-          map: colormap,
-          roughness: 0.72,
-          metalness: 0.06,
-        })
-    );
+    const next = mats.map(() => {
+      const mat = new THREE.MeshStandardMaterial({
+        map: colormap,
+        roughness: 0.72,
+        metalness: 0.06,
+      });
+      bindColormapLampGlow(mat);
+      return mat;
+    });
     child.material = next.length === 1 ? next[0] : next;
   });
 }
@@ -176,12 +184,16 @@ function layoutKenneySuv(
   body.add(suv);
   body.renderOrder = 5;
 
+  const anchorsLocal = computeCarLightAnchors(suv);
+  const lightAnchors = anchorsToBodySpace(anchorsLocal, suv.position);
+
   return {
     body,
     wheelTemplate: null as unknown as THREE.Group,
     physicsWheelPositions,
     wheelRadius: 0.18,
     chassisSize: { x: _size.x, y: _size.y, z: _size.z },
+    lightAnchors,
   };
 }
 

@@ -111,6 +111,7 @@ export function startAnimationLoop(
     world.step();
     input.afterPhysics(dt);
     syncCar(car);
+    car.lights.update(weather.getRainIntensity(), controller.isBraking());
 
     const pos = car.body.translation();
     const vel = car.body.linvel();

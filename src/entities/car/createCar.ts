@@ -4,12 +4,14 @@ import type { DynamicRayCastVehicleController } from '@dimforge/rapier3d-compat'
 import { getWorldTerrainY } from '../../terrain/terrainHeight';
 import { getWorld } from '../../physics/world';
 import { CAR_CONFIG } from './carConfig';
+import { createCarLights, type CarLights } from './carLights';
 import { loadKenneySuvVisual } from './kenneyCarVisual';
 
 export type CarEntity = {
   body: RAPIER.RigidBody;
   collider: RAPIER.Collider;
   mesh: THREE.Group;
+  lights: CarLights;
   wheels: THREE.Group[];
   vehicle: DynamicRayCastVehicleController;
   driveFrontAxleIndices: number[];
@@ -26,6 +28,10 @@ export async function createCar(): Promise<CarEntity> {
     spawn,
     colliderYOffset,
     colliderRoundness,
+    colliderHeightScale,
+    colliderLocalYFactor,
+    centerOfMassY,
+    angularDamping,
     mass,
     suspension,
   } = CAR_CONFIG;
@@ -38,24 +44,38 @@ export async function createCar(): Promise<CarEntity> {
   const hx = chassisSize.x / 2;
   const hy = chassisSize.y / 2;
   const hz = chassisSize.z / 2;
-  // Shorter collider so the body box doesn't sit on the ground instead of the tires.
-  const colliderHy = hy * 0.82;
+  const colliderHy = hy * colliderHeightScale;
+  const colliderLocalY = colliderYOffset + hy * colliderLocalYFactor;
 
   const body = world.createRigidBody(
     RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(spawn.x, spawnY, spawn.z)
       .setLinearDamping(0.1)
-      .setAngularDamping(0.25)
+      .setAngularDamping(angularDamping)
       .setCcdEnabled(true)
   );
 
   const collider = world.createCollider(
     RAPIER.ColliderDesc.roundCuboid(hx, colliderHy, hz, colliderRoundness)
-      .setTranslation(0, colliderYOffset + hy * 0.12, 0)
+      .setTranslation(0, colliderLocalY, 0)
       .setFriction(0.35)
-      .setRestitution(0)
-      .setMass(mass),
+      .setRestitution(0),
     body
+  );
+
+  const wx = hx * 2;
+  const wy = colliderHy * 2;
+  const wz = hz * 2;
+  body.setAdditionalMassProperties(
+    mass,
+    { x: 0, y: centerOfMassY, z: 0 },
+    {
+      x: (mass / 12) * (wy * wy + wz * wz),
+      y: (mass / 12) * (wx * wx + wz * wz),
+      z: (mass / 12) * (wx * wx + wy * wy),
+    },
+    { w: 1, x: 0, y: 0, z: 0 },
+    true
   );
 
   const vehicle = world.createVehicleController(body);
@@ -109,10 +129,18 @@ export async function createCar(): Promise<CarEntity> {
     return wheel;
   });
 
+  const lights = createCarLights(
+    layout.lightAnchors,
+    CAR_CONFIG.scale,
+    layout.body
+  );
+  layout.body.add(lights.group);
+
   return {
     body,
     collider,
     mesh: layout.body,
+    lights,
     wheels,
     vehicle,
     driveFrontAxleIndices,

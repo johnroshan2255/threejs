@@ -27,6 +27,10 @@ export class CarController {
     private steeringWheelIndices: number[]
   ) {}
 
+  isBraking(): boolean {
+    return this.braking;
+  }
+
   /** Wheel inputs — call before world.step(). */
   applyInput(dt: number, input: DriveInput) {
     this.braking = input.braking;

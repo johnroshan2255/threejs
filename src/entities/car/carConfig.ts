@@ -1,9 +1,9 @@
 export const CAR_CONFIG = {
   /** Uniform scale for Kenney mesh + Rapier collider / wheels. */
-  scale: 1.4,
-  mass: 82,
+  scale: 1.7,
+  mass: 100,
   /** Grass crush stamp width (scales with car). */
-  wheelWidth: 0.48,
+  wheelWidth: 0.58,
 
   /** Main engine torque (Kenney back axle, hood / -Z). */
   driveFrontAxleIndices: [0, 1],
@@ -11,10 +11,17 @@ export const CAR_CONFIG = {
   /** Kenney front axle (+Z) — visual front wheels. */
   steeringWheelIndices: [2, 3],
 
-  colliderYOffset: 0.05,
+  colliderYOffset: 0,
   colliderRoundness: 0.05,
+  /** Collider half-height scale (squatter = lower mass). */
+  colliderHeightScale: 0.62,
+  /** Collider center below body origin (× chassis half-height). */
+  colliderLocalYFactor: -0.5,
+  /** Rigid-body center of mass (negative Y = lower, more stable). */
+  centerOfMassY: -0.78,
+  angularDamping: 0.38,
 
-  spawn: { x: 0, z: 0, clearance: 0.85 },
+  spawn: { x: 0, z: 0, clearance: 1.0 },
 
   suspension: {
     restLength: 0.28,
