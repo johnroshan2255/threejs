@@ -22,6 +22,14 @@ export class CarInput {
     space: false,
   };
 
+  private touchKeys = {
+    w: false,
+    s: false,
+    a: false,
+    d: false,
+    space: false,
+  };
+
   private onKeyDown = (e: KeyboardEvent) => {
     if (e.code === 'KeyR') {
       e.preventDefault();
@@ -50,7 +58,23 @@ export class CarInput {
     this.keys.a = false;
     this.keys.d = false;
     this.keys.space = false;
+    this.touchKeys.w = false;
+    this.touchKeys.s = false;
+    this.touchKeys.a = false;
+    this.touchKeys.d = false;
+    this.touchKeys.space = false;
   };
+
+  setTouchKey(key: keyof typeof this.touchKeys, pressed: boolean): void {
+    if (this.touchKeys[key] === pressed) return;
+    this.touchKeys[key] = pressed;
+    if (pressed) this.onFirstInput?.();
+  }
+
+  requestReset(): void {
+    this.clearKeys();
+    this.onReset();
+  }
 
   private set(e: KeyboardEvent, val: boolean) {
     switch (e.code) {
@@ -74,17 +98,17 @@ export class CarInput {
 
   applyInput(dt: number) {
     let throttle = 0;
-    if (this.keys.w) throttle += 1;
-    if (this.keys.s) throttle -= 1;
+    if (this.keys.w || this.touchKeys.w) throttle += 1;
+    if (this.keys.s || this.touchKeys.s) throttle -= 1;
 
     let steer = 0;
-    if (this.keys.a) steer += 1;
-    if (this.keys.d) steer -= 1;
+    if (this.keys.a || this.touchKeys.a) steer += 1;
+    if (this.keys.d || this.touchKeys.d) steer -= 1;
 
     const input: DriveInput = {
       throttle,
       steer,
-      braking: this.keys.space,
+      braking: this.keys.space || this.touchKeys.space,
     };
 
     this.controller.applyInput(dt, input);

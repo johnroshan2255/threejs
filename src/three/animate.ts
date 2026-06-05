@@ -12,6 +12,7 @@ import { ChaseCameraInput } from './chaseCameraInput';
 import type { SceneLights } from './lights';
 import type { WeatherSystem } from './weather/weatherSystem';
 import { WeatherInput } from './weather/weatherInput';
+import { createMobileControls } from '../input/mobileControls';
 import type { BeachCoast } from './meshes/beachCoast';
 
 const _wheelSteerQuat = new THREE.Quaternion();
@@ -99,6 +100,7 @@ export function startAnimationLoop(
     },
     () => weather.resumeAudio()
   );
+  createMobileControls(input);
   const cameraInput = new ChaseCameraInput(renderer.domElement);
   new WeatherInput(weather);
 

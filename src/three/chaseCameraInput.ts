@@ -24,6 +24,7 @@ export class ChaseCameraInput {
 
   private onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('#mobile-controls')) return;
     this.dragging = true;
     this.lastX = e.clientX;
     this.lastY = e.clientY;

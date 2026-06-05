@@ -1,0 +1,16 @@
+{
+  "name": "my-three-app",
+  "short_name": "Drive",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0a0a12",
+  "theme_color": "#0a0a12",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
