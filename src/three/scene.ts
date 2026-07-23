@@ -6,6 +6,7 @@ import { ChunkManager } from '../terrain/chunkManager';
 import { applySceneFog } from './sceneFog';
 import { createBeachCoast, type BeachCoast } from './meshes/beachCoast';
 import { createWeatherSystem, type WeatherSystem } from './weather/weatherSystem';
+import { createWorldBounds } from '../physics/worldBounds';
 
 export async function createScene(): Promise<{
   scene: THREE.Scene;
@@ -19,6 +20,8 @@ export async function createScene(): Promise<{
   const scene = new THREE.Scene();
   const fog = applySceneFog(scene);
   const lights = createLights();
+
+  createWorldBounds();
 
   const chunkManager = new ChunkManager(scene);
   chunkManager.loadAround(0, 0);

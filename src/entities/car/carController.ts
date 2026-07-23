@@ -78,8 +78,28 @@ export class CarController {
   /** Vehicle update — call after world.step(). */
   afterPhysics(dt: number) {
     this.vehicle.updateVehicle(dt);
+    this.applyAntiRollStabilization();
     this.applyWaterEffects();
     this.clampSpeed(CAR_CONFIG.drive.maxSpeed);
+  }
+
+  /** Active anti-roll & uprighting stabilization torque. Prevents car from flipping on hills. */
+  private applyAntiRollStabilization() {
+    const rot = this.body.rotation();
+
+    // Transform world UP (0, 1, 0) into local body space
+    const upX = 2 * (rot.x * rot.y - rot.w * rot.z);
+    const upY = 1 - 2 * (rot.x * rot.x + rot.z * rot.z);
+    const upZ = 2 * (rot.y * rot.z + rot.w * rot.x);
+
+    // If car is leaning sideways or tilting backwards (upY < 0.96)
+    if (upY < 0.96) {
+      const tiltSeverity = (1.0 - upY) * 220.0;
+      this.body.applyTorqueImpulse(
+        { x: -upZ * tiltSeverity, y: 0, z: upX * tiltSeverity },
+        true
+      );
+    }
   }
 
   private applyWaterEffects() {
@@ -119,10 +139,6 @@ export class CarController {
     }
   }
 
-  /**
-   * Rapier vehicle forward is +Z; Kenney hood faces -Z.
-   * Negative engine on W drives toward -Z (forward).
-   */
   private computeEngineForce(): number {
     if (Math.abs(this.throttle) < 0.02) return 0;
 

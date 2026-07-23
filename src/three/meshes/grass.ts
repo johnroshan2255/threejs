@@ -3,9 +3,9 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { PhysicsObject } from '../../physics/physics';
 import { applyGrassWind } from '../../shaders/grassWind';
 import { ChunkGrassCrushMap } from '../../terrain/grassCrushMap';
+import { createChunkPRNG } from '../../terrain/prng';
 import {
   CHUNK_SIZE,
-  GRASS_TARGET_TUFTS,
   GRASS_TUFT_MAX_CAPACITY,
   chunkWorldCenter,
 } from '../../terrain/chunkConfig';
@@ -13,62 +13,73 @@ import { hasGrass } from '../../terrain/fieldMask';
 import { getWorldTerrainY } from '../../terrain/terrainHeight';
 
 const FIELD_SIZE = CHUNK_SIZE;
-const BLADE_WIDTH = 0.26;
-const BLADE_HEIGHT = 0.4;
-const BLADE_HALF_HEIGHT = BLADE_HEIGHT / 2;
 const HEIGHT_GRID_RES = 64;
-const TUFT_BLADE_COUNT = 5;
 
 let tuftGeometry: THREE.BufferGeometry | null = null;
 
-function createTaperedBladeGeometry(): THREE.BufferGeometry {
-  const geometry = new THREE.PlaneGeometry(BLADE_WIDTH, BLADE_HEIGHT, 1, 4);
+function createTaperedBladeGeometry(
+  width: number,
+  height: number
+): THREE.BufferGeometry {
+  const geometry = new THREE.PlaneGeometry(width, height, 1, 4);
   const positions = geometry.attributes.position;
+  const normals = geometry.attributes.normal;
+  const HALF_H = height / 2;
 
   for (let i = 0; i < positions.count; i++) {
     const y = positions.getY(i);
-    const normalizedY = (y + BLADE_HALF_HEIGHT) / BLADE_HEIGHT;
-    const widthMultiplier = 1 - normalizedY * 0.3;
+    const normalizedY = (y + HALF_H) / height;
+    const widthMultiplier = Math.pow(1 - normalizedY, 0.55);
     positions.setX(i, positions.getX(i) * widthMultiplier);
+
+    const curve = Math.pow(normalizedY, 1.8) * 0.12;
+    positions.setZ(i, positions.getZ(i) + curve);
+
+    normals.setXYZ(i, 0, 0.95, 0.1);
   }
 
   positions.needsUpdate = true;
-  geometry.computeVertexNormals();
-  geometry.translate(0, BLADE_HALF_HEIGHT, 0);
+  normals.needsUpdate = true;
+  geometry.translate(0, HALF_H, 0);
   return geometry;
 }
 
 function getTuftGeometry(): THREE.BufferGeometry {
   if (tuftGeometry) return tuftGeometry;
 
-  const blade = createTaperedBladeGeometry();
   const parts: THREE.BufferGeometry[] = [];
+  const BLADE_COUNT = 12;
 
-  const skirt = blade.clone();
-  skirt.scale(2.8, 0.45, 1);
-  parts.push(skirt);
+  for (let i = 0; i < BLADE_COUNT; i++) {
+    const w = 0.075 + (i % 3) * 0.02;
+    const h = 0.85 + (i % 4) * 0.15;
+    const blade = createTaperedBladeGeometry(w, h);
 
-  const skirtCross = blade.clone();
-  skirtCross.scale(2.8, 0.45, 1);
-  skirtCross.rotateY(Math.PI / 2);
-  parts.push(skirtCross);
+    const angle = (i / BLADE_COUNT) * Math.PI * 2 + i * 0.32;
+    const offsetX = Math.sin(angle) * 0.10;
+    const offsetZ = Math.cos(angle) * 0.10;
+    const tilt = 0.1 + (i % 3) * 0.06;
 
-  for (let i = 0; i < TUFT_BLADE_COUNT; i++) {
-    const copy = blade.clone();
-    copy.rotateY((i / TUFT_BLADE_COUNT) * Math.PI * 2);
-    parts.push(copy);
+    blade.rotateX(tilt);
+    blade.rotateY(angle);
+    blade.translate(offsetX, 0, offsetZ);
+    parts.push(blade);
   }
 
   const merged = mergeGeometries(parts);
-  blade.dispose();
   parts.forEach((p) => p.dispose());
 
   if (!merged) {
-    tuftGeometry = createTaperedBladeGeometry();
+    tuftGeometry = createTaperedBladeGeometry(0.08, 0.95);
     return tuftGeometry;
   }
 
-  merged.computeVertexNormals();
+  const normals = merged.attributes.normal;
+  for (let i = 0; i < normals.count; i++) {
+    normals.setXYZ(i, 0, 0.95, 0.1);
+  }
+  normals.needsUpdate = true;
+
   tuftGeometry = merged;
   return tuftGeometry;
 }
@@ -140,8 +151,8 @@ export function createGrassMaterialForChunk(
   crushMap: ChunkGrassCrushMap
 ): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial({
-    color: 0x2d5a28,
-    side: THREE.FrontSide,
+    color: 0xffffff,
+    side: THREE.DoubleSide,
     polygonOffset: true,
     polygonOffsetFactor: 2,
     polygonOffsetUnits: 8,
@@ -159,6 +170,7 @@ export function beginGrassChunk(
   grid: ChunkHeightGrid;
   centerX: number;
   centerZ: number;
+  prng: () => number;
 } {
   const { x: centerX, z: centerZ } = chunkWorldCenter(chunkX, chunkZ);
   const mesh = new THREE.InstancedMesh(
@@ -176,45 +188,49 @@ export function beginGrassChunk(
     FIELD_SIZE * 0.85
   );
 
+  const prng = createChunkPRNG(chunkX, chunkZ);
+
   return {
     mesh,
     grid: createChunkHeightGrid(chunkX, chunkZ),
     centerX,
     centerZ,
+    prng,
   };
 }
 
 const _dummy = new THREE.Object3D();
 
-/** Place tufts in grass patches only; returns new placed count. */
 export function buildGrassTuftBatch(
   mesh: THREE.InstancedMesh,
   grid: ChunkHeightGrid,
   centerX: number,
   centerZ: number,
   from: number,
-  batchGoal: number
+  batchGoal: number,
+  prng: () => number,
+  targetTufts: number
 ): number {
-  const target = Math.min(from + batchGoal, GRASS_TARGET_TUFTS);
+  const target = Math.min(from + batchGoal, targetTufts);
   let placed = from;
   let tries = 0;
   const maxTries = batchGoal * 18 + 100;
 
   while (placed < target && tries < maxTries) {
     tries++;
-    const x = centerX + (Math.random() - 0.5) * FIELD_SIZE;
-    const z = centerZ + (Math.random() - 0.5) * FIELD_SIZE;
+    const x = centerX + (prng() - 0.5) * FIELD_SIZE;
+    const z = centerZ + (prng() - 0.5) * FIELD_SIZE;
 
     if (!hasGrass(x, z)) continue;
 
     const y = sampleHeightGrid(grid, x, z);
-    const scale = 0.55 + Math.random() * 0.4;
-    const spread = scale * 1.4;
+    const scale = 1.0 + prng() * 0.45;
+    const spread = scale * 1.95;
 
     _dummy.position.set(x, y, z);
-    _dummy.rotation.y = Math.random() * Math.PI;
-    _dummy.rotation.x = (Math.random() - 0.5) * 0.12;
-    _dummy.rotation.z = (Math.random() - 0.5) * 0.12;
+    _dummy.rotation.y = prng() * Math.PI * 2;
+    _dummy.rotation.x = (prng() - 0.5) * 0.14;
+    _dummy.rotation.z = (prng() - 0.5) * 0.14;
     _dummy.scale.set(spread, scale, spread);
     _dummy.updateMatrix();
     mesh.setMatrixAt(placed, _dummy.matrix);
@@ -226,8 +242,11 @@ export function buildGrassTuftBatch(
   return placed;
 }
 
-export function isGrassChunkComplete(placed: number): boolean {
-  return placed >= GRASS_TARGET_TUFTS;
+export function isGrassChunkComplete(
+  placed: number,
+  targetTufts: number
+): boolean {
+  return placed >= targetTufts;
 }
 
 export function disposeGrassMesh(grass: THREE.InstancedMesh): void {
@@ -237,8 +256,8 @@ export function disposeGrassMesh(grass: THREE.InstancedMesh): void {
 export function createGrass(): PhysicsObject {
   const crushMap = new ChunkGrassCrushMap(0, 0);
   const material = createGrassMaterialForChunk(crushMap);
-  const { mesh, grid, centerX, centerZ } = beginGrassChunk(0, 0, material);
-  buildGrassTuftBatch(mesh, grid, centerX, centerZ, 0, GRASS_TARGET_TUFTS);
+  const { mesh, grid, centerX, centerZ, prng } = beginGrassChunk(0, 0, material);
+  buildGrassTuftBatch(mesh, grid, centerX, centerZ, 0, 14000, prng, 14000);
 
   return {
     mesh,

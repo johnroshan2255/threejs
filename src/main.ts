@@ -21,6 +21,11 @@ hint.id = 'controls-hint';
 hint.textContent = 'WASD · Space brake · R reset · P change weather';
 document.body.appendChild(hint);
 
+const fpsCounter = document.createElement('div');
+fpsCounter.id = 'fps-counter';
+fpsCounter.textContent = '60 FPS';
+document.body.appendChild(fpsCounter);
+
 handleResize(camera, renderer, weather.rain);
 
 startAnimationLoop(

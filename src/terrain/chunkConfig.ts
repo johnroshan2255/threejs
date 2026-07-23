@@ -1,41 +1,69 @@
-/** World chunk size (matches original single patch). */
+/** World chunk size. */
 export const CHUNK_SIZE = 25;
 
-/** Vertices per chunk edge (lower = faster). */
-export const CHUNK_SEGMENTS = 32;
+/** Finite world boundaries (19x19 grid from -9 to +9 = 475m x 475m map). */
+export const FINITE_WORLD_MIN_X = -9;
+export const FINITE_WORLD_MAX_X = 9;
+export const FINITE_WORLD_MIN_Z = -9;
+export const FINITE_WORLD_MAX_Z = 9;
 
-/** Terrain chunks to load around the player (2 → 5×5). */
-export const TERRAIN_VIEW_RADIUS = 2;
+/** Helper to check if chunk coordinates are inside the finite world boundaries. */
+export function isChunkInFiniteWorld(chunkX: number, chunkZ: number): boolean {
+  return (
+    chunkX >= FINITE_WORLD_MIN_X &&
+    chunkX <= FINITE_WORLD_MAX_X &&
+    chunkZ >= FINITE_WORLD_MIN_Z &&
+    chunkZ <= FINITE_WORLD_MAX_Z
+  );
+}
 
-/** Keep chunks longer than load radius to avoid visible holes while driving. */
-export const TERRAIN_UNLOAD_RADIUS = 4;
+/** LOD Tier definitions */
+export type LodTier = 0 | 1 | 2;
 
-/** Max instanced tuft slots per chunk (only patches of the chunk fill grass). */
-export const GRASS_TUFT_MAX_CAPACITY = 12_000;
+export const LOD_CONFIG: Record<
+  LodTier,
+  {
+    maxDistance: number;
+    segments: number;
+    targetTufts: number;
+    hasPhysics: boolean;
+  }
+> = {
+  0: {
+    maxDistance: 1.5,
+    segments: 64,
+    targetTufts: 14_000,
+    hasPhysics: true,
+  },
+  1: {
+    maxDistance: 2.5,
+    segments: 32,
+    targetTufts: 5_000,
+    hasPhysics: true,
+  },
+  2: {
+    maxDistance: 4.5,
+    segments: 16,
+    targetTufts: 0,
+    hasPhysics: false,
+  },
+};
 
-/** Target tufts to place per chunk inside grass patches. */
-export const GRASS_TARGET_TUFTS = 9_000;
+/** Max instanced tuft slots per chunk. */
+export const GRASS_TUFT_MAX_CAPACITY = 16_000;
 
 /** Tufts attempted per frame while a chunk is building. */
-export const GRASS_BUILD_BATCH = 2_500;
+export const GRASS_BUILD_BATCH = 3_500;
 
 /** Rocks on bare sand per terrain chunk. */
-export const PROPS_PER_CHUNK = 3;
+export const PROPS_PER_CHUNK = 0;
 
-/** @deprecated */
-export const GRASS_TUFTS_PER_CHUNK = GRASS_TUFT_MAX_CAPACITY;
+/** Manhattan radius for 3D grass (LOD 0 & 1). */
+export const GRASS_VIEW_RADIUS = 2;
 
-/** Manhattan radius for 3D grass (1 = 3×3 around player). */
-export const GRASS_VIEW_RADIUS = 1;
-
-/** Only a few simple bushes per grass chunk. */
-export const BUSHES_PER_CHUNK = 3;
-
-/** Same ring as grass. */
+/** Bush LOD radius. */
 export const BUSH_VIEW_RADIUS = 1;
-
-/** @deprecated Use GRASS_TUFTS_PER_CHUNK */
-export const GRASS_BLADES_PER_CHUNK = GRASS_TUFTS_PER_CHUNK;
+export const BUSHES_PER_CHUNK = 0;
 
 export function chunkKey(chunkX: number, chunkZ: number): string {
   return `${chunkX},${chunkZ}`;

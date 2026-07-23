@@ -14,7 +14,7 @@ function hash2(x: number, y: number): number {
   return s - Math.floor(s);
 }
 
-/** Mars-like dusty ground: terracotta soil covered in small pebbles. */
+/** Far Cry 4 Kyrat style warm dusty grayish-khaki dirt path & mountain soil (matching reference image 2). */
 function createGroundTexture(): THREE.CanvasTexture {
   const size = 256;
   const canvas = document.createElement('canvas');
@@ -22,8 +22,8 @@ function createGroundTexture(): THREE.CanvasTexture {
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
 
-  const dustA = '#b86848';
-  const dustB = '#a45438';
+  const dirtA = '#9a9080';
+  const dirtB = '#847a6c';
 
   const grad = ctx.createRadialGradient(
     size * 0.5,
@@ -33,9 +33,9 @@ function createGroundTexture(): THREE.CanvasTexture {
     size * 0.5,
     size * 0.72
   );
-  grad.addColorStop(0, '#c07858');
-  grad.addColorStop(0.55, dustA);
-  grad.addColorStop(1, dustB);
+  grad.addColorStop(0, '#aba090');
+  grad.addColorStop(0.55, dirtA);
+  grad.addColorStop(1, dirtB);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
 
@@ -52,20 +52,20 @@ function createGroundTexture(): THREE.CanvasTexture {
       let g = data[i + 1]!;
       let b = data[i + 2]!;
 
-      r += (grain - 0.5) * 18;
+      r += (grain - 0.5) * 16;
       g += (grain - 0.5) * 14;
-      b += (grain - 0.5) * 10;
+      b += (grain - 0.5) * 12;
 
-      if (n > 0.52) {
-        const pebble = hash2(x * 0.12 + 40, y * 0.11);
-        const lift = (pebble - 0.5) * 55;
-        r += lift + 12;
-        g += lift * 0.75 + 6;
-        b += lift * 0.55 + 2;
+      if (n > 0.55) {
+        // Grey slate pebble / gravel grain
+        r += 12;
+        g += 10;
+        b += 8;
       } else if (n > 0.38) {
+        // Dry soil silt variation
         r -= 8;
-        g -= 10;
-        b -= 12;
+        g -= 8;
+        b -= 8;
       }
 
       data[i] = Math.max(0, Math.min(255, r));
@@ -77,19 +77,18 @@ function createGroundTexture(): THREE.CanvasTexture {
   ctx.putImageData(img, 0, 0);
 
   const pebbleColors = [
-    '#8f4a34',
-    '#9a553c',
-    '#b06a4c',
-    '#7a3f2c',
-    '#c48262',
-    '#6e3828',
+    '#7a7266',
+    '#888072',
+    '#686054',
+    '#b4a896',
+    '#5c564c',
   ];
 
-  for (let i = 0; i < 520; i++) {
+  for (let i = 0; i < 480; i++) {
     const x = hash2(i * 1.7, i * 2.3) * size;
     const y = hash2(i * 3.1, i * 1.9) * size;
-    const rx = 0.8 + hash2(i, 11) * 3.2;
-    const ry = 0.6 + hash2(i, 22) * 2.4;
+    const rx = 0.8 + hash2(i, 11) * 2.8;
+    const ry = 0.6 + hash2(i, 22) * 2.2;
     const rot = hash2(i, 33) * Math.PI;
 
     ctx.fillStyle = pebbleColors[Math.floor(hash2(i, 44) * pebbleColors.length)]!;
@@ -97,17 +96,17 @@ function createGroundTexture(): THREE.CanvasTexture {
     ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = 'rgba(60, 28, 18, 0.12)';
+    ctx.fillStyle = 'rgba(40, 35, 30, 0.14)';
     ctx.beginPath();
     ctx.ellipse(x + rx * 0.15, y + ry * 0.12, rx * 0.9, ry * 0.85, rot, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  for (let i = 0; i < 1800; i++) {
+  for (let i = 0; i < 1600; i++) {
     const x = hash2(i * 5.7, i) * size;
     const y = hash2(i, i * 4.2) * size;
     const s = 0.4 + hash2(i, 77) * 1.2;
-    ctx.fillStyle = `rgba(${90 + hash2(i, 88) * 40},${45 + hash2(i, 99) * 25},${30 + hash2(i, 55) * 20},0.35)`;
+    ctx.fillStyle = `rgba(${120 + hash2(i, 88) * 40},${110 + hash2(i, 99) * 35},${95 + hash2(i, 55) * 30},0.25)`;
     ctx.fillRect(x, y, s, s);
   }
 
@@ -124,7 +123,7 @@ export const grassTexture = loadRepeatTexture('/grass.avif', [50, 50]);
 
 export const groundTexture = createGroundTexture();
 
-/** Light beach sand (shells / fine grains). */
+/** Light riverbed / mountain sand texture. */
 function createBeachSandTexture(): THREE.CanvasTexture {
   const size = 256;
   const canvas = document.createElement('canvas');
@@ -133,17 +132,17 @@ function createBeachSandTexture(): THREE.CanvasTexture {
   const ctx = canvas.getContext('2d')!;
 
   const grad = ctx.createLinearGradient(0, 0, size, size);
-  grad.addColorStop(0, '#f8edd0');
-  grad.addColorStop(0.45, '#edd9a8');
-  grad.addColorStop(1, '#dcc090');
+  grad.addColorStop(0, '#c8b696');
+  grad.addColorStop(0.45, '#b4a080');
+  grad.addColorStop(1, '#9e8b6d');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
 
   for (let i = 0; i < 2400; i++) {
     const x = hash2(i * 2.1, i) * size;
     const y = hash2(i, i * 3.3) * size;
-    const g = 200 + hash2(i, 7) * 40;
-    ctx.fillStyle = `rgba(${g},${g - 15},${g - 45},0.25)`;
+    const g = 160 + hash2(i, 7) * 40;
+    ctx.fillStyle = `rgba(${g},${g - 15},${g - 35},0.25)`;
     ctx.fillRect(x, y, 0.8 + hash2(i, 9), 0.8 + hash2(i, 11));
   }
 
@@ -157,7 +156,5 @@ function createBeachSandTexture(): THREE.CanvasTexture {
 
 export const beachSandTexture = createBeachSandTexture();
 
-/** Tint multiplied with groundTexture (white = use texture as-is). */
 export const TERRAIN_SAND_COLOR = 0xffffff;
-/** @deprecated Use TERRAIN_SAND_COLOR */
 export const TERRAIN_MUD_COLOR = TERRAIN_SAND_COLOR;

@@ -31,6 +31,21 @@ canvas {
   z-index: 5;
 }
 
+#fps-counter {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  padding: 6px 10px;
+  font: 600 12px/1.4 Monaco, Consolas, 'Courier New', monospace;
+  color: #4ade80;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  pointer-events: none;
+  user-select: none;
+  z-index: 10;
+}
+
 #mobile-controls {
   display: none;
   position: fixed;

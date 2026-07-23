@@ -13,11 +13,11 @@ export type SceneLights = {
 };
 
 export function createLights(): SceneLights {
-  const ambient = new THREE.AmbientLight(0xbfd4ff, 0.38);
+  const ambient = new THREE.AmbientLight(0x98b0cc, 0.45);
 
-  const hemi = new THREE.HemisphereLight(0xc8d8f0, 0x5a5048, 0.42);
+  const hemi = new THREE.HemisphereLight(0xa0b8d4, 0x3d362e, 0.32);
 
-  const sun = new THREE.DirectionalLight(0xfff5e6, 1.6);
+  const sun = new THREE.DirectionalLight(0xfff6e6, 1.30);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.near = 0.5;
@@ -57,11 +57,11 @@ export function updateSunLighting(
   lights.sun.color.setHex(preset.sunColor);
   lights.sun.intensity = preset.sunIntensity;
   lights.ambient.color.setHex(preset.ambientColor);
-  lights.ambient.intensity = preset.ambientIntensity * 0.88;
+  lights.ambient.intensity = preset.ambientIntensity * 0.58;
 
   lights.hemi.color.setHex(preset.ambientColor);
-  lights.hemi.groundColor.setHex(0x4a4438);
-  lights.hemi.intensity = preset.ambientIntensity * 0.5;
+  lights.hemi.groundColor.setHex(0x3d362e);
+  lights.hemi.intensity = preset.ambientIntensity * 0.42;
 
   lights.sun.target.updateMatrixWorld();
   lights.sun.updateMatrixWorld();

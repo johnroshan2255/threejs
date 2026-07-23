@@ -1,4 +1,5 @@
 import { getBeachInfluence, getBeachSurfaceHeight } from './beach';
+import { getRoadFactor, getRoadCenterX } from './road';
 
 function hash2(x: number, z: number): number {
   const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
@@ -29,14 +30,14 @@ function valueNoise(x: number, z: number): number {
 function fbm(x: number, z: number, octaves = 5): number {
   let value = 0;
   let amplitude = 1;
-  let frequency = 0.04;
+  let frequency = 0.032;
   let maxValue = 0;
 
   for (let i = 0; i < octaves; i++) {
     value += amplitude * (valueNoise(x * frequency, z * frequency) * 2 - 1);
     maxValue += amplitude;
     amplitude *= 0.5;
-    frequency *= 2.1;
+    frequency *= 2.05;
   }
 
   return value / maxValue;
@@ -45,10 +46,20 @@ function fbm(x: number, z: number, octaves = 5): number {
 /** Height displacement in plane local space (before mesh rotation). */
 export function getBaseTerrainHeight(x: number, z: number): number {
   const n = fbm(x, z);
-  const hills = n * 4;
-  const valleys = Math.pow(Math.abs(n), 1.5) * Math.sign(n) * 0.8;
+  const hills = n * 9.5;
+  const ridges = Math.pow(Math.abs(n), 1.6) * Math.sign(n) * 3.5;
+  const rawHeight = hills + ridges;
 
-  return hills + valleys;
+  // Carve road slope into hillside: road follows smooth grade
+  const worldZ = -z;
+  const roadFactor = getRoadFactor(x, worldZ);
+  if (roadFactor > 0.01) {
+    const roadX = getRoadCenterX(worldZ);
+    const roadCenterBaseHeight = fbm(roadX, z) * 9.5 + Math.pow(Math.abs(fbm(roadX, z)), 1.6) * 3.5;
+    return rawHeight * (1.0 - roadFactor * 0.85) + roadCenterBaseHeight * (roadFactor * 0.85);
+  }
+
+  return rawHeight;
 }
 
 export function getTerrainHeight(x: number, z: number): number {
@@ -67,4 +78,3 @@ export const TERRAIN_BASE_Y = -1;
 export function getWorldTerrainY(worldX: number, worldZ: number): number {
   return TERRAIN_BASE_Y + getTerrainHeight(worldX, -worldZ);
 }
-

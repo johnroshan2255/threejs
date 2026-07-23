@@ -13,14 +13,13 @@ import {
   type ChunkHeightGrid,
 } from '../three/meshes/grass';
 import { updateGrassShaderUniforms } from '../shaders/grassWind';
-import { getNeededTerrainChunks } from './chunkQueries';
+import { getNeededChunksWithLod } from './chunkQueries';
 import {
   chunkKey,
   GRASS_BUILD_BATCH,
-  BUSH_VIEW_RADIUS,
-  GRASS_VIEW_RADIUS,
-  TERRAIN_UNLOAD_RADIUS,
+  LOD_CONFIG,
   worldToChunk,
+  type LodTier,
 } from './chunkConfig';
 import {
   ChunkGrassCrushMap,
@@ -49,6 +48,9 @@ import {
 } from './terrainChunk';
 
 type LoadedChunk = {
+  chunkX: number;
+  chunkZ: number;
+  lodLevel: LodTier;
   terrain: TerrainChunk;
   grass: THREE.InstancedMesh | null;
   grassMaterial: THREE.MeshLambertMaterial | null;
@@ -65,7 +67,9 @@ type GrassBuildJob = {
   grid: ChunkHeightGrid;
   centerX: number;
   centerZ: number;
+  prng: () => number;
   index: number;
+  targetTufts: number;
 };
 
 export class ChunkManager {
@@ -83,26 +87,22 @@ export class ChunkManager {
     this.crabMaterial = createCrabMaterial();
   }
 
-  update(worldX: number, worldZ: number, velX = 0, velZ = 0): void {
-    const needed = getNeededTerrainChunks(worldX, worldZ, velX, velZ);
-    const { chunkX, chunkZ } = worldToChunk(worldX, worldZ);
+  update(worldX: number, worldZ: number): void {
+    const neededMap = getNeededChunksWithLod(worldX, worldZ);
 
-    for (const key of needed) {
-      const [cx, cz] = key.split(',').map(Number);
-      this.ensureTerrain(cx, cz);
+    for (const [key, { chunkX, chunkZ, lod }] of neededMap) {
+      this.ensureTerrain(chunkX, chunkZ, lod);
 
-      const dist = Math.max(
-        Math.abs(cx - chunkX),
-        Math.abs(cz - chunkZ)
-      );
-
-      if (dist <= GRASS_VIEW_RADIUS) {
-        this.ensureGrass(cx, cz);
+      const targetTufts = LOD_CONFIG[lod].targetTufts;
+      if (targetTufts > 0) {
+        this.ensureGrass(chunkX, chunkZ, targetTufts);
       } else {
         this.removeGrass(key);
       }
 
-      if (dist > BUSH_VIEW_RADIUS) {
+      if (lod <= 1) {
+        this.ensureBushes(chunkX, chunkZ);
+      } else {
         this.removeBushes(key);
       }
     }
@@ -111,21 +111,14 @@ export class ChunkManager {
     this.syncAllProps();
 
     for (const [key, chunk] of this.chunks) {
-      if (needed.has(key)) continue;
-
-      const [cx, cz] = key.split(',').map(Number);
-      const dist = Math.max(
-        Math.abs(cx - chunkX),
-        Math.abs(cz - chunkZ)
-      );
-      if (dist > TERRAIN_UNLOAD_RADIUS) {
+      if (!neededMap.has(key)) {
         this.unloadChunk(key, chunk);
       }
     }
   }
 
   loadAround(worldX: number, worldZ: number): void {
-    this.update(worldX, worldZ, 0, 0);
+    this.update(worldX, worldZ);
   }
 
   addPuddleWater(worldX: number, worldZ: number, amount: number): void {
@@ -151,17 +144,8 @@ export class ChunkManager {
     rainIntensity: number,
     evaporationRate: number
   ): void {
-    const { chunkX, chunkZ } = worldToChunk(worldX, worldZ);
-
     for (const [key, chunk] of this.chunks) {
-      const [cx, cz] = key.split(',').map(Number);
-      const dist = Math.max(
-        Math.abs(cx - chunkX),
-        Math.abs(cz - chunkZ)
-      );
-      if (dist > TERRAIN_UNLOAD_RADIUS) continue;
-
-      const map = this.getOrCreatePuddleMap(cx, cz);
+      const map = this.getOrCreatePuddleMap(chunk.chunkX, chunk.chunkZ);
       if (rainIntensity > 0.05) {
         map.addDrizzle(rainIntensity, dt);
       }
@@ -238,11 +222,13 @@ export class ChunkManager {
         job.centerX,
         job.centerZ,
         job.index,
-        job.index + GRASS_BUILD_BATCH
+        GRASS_BUILD_BATCH,
+        job.prng,
+        job.targetTufts
       );
       job.index = next;
 
-      if (!isGrassChunkComplete(next)) continue;
+      if (!isGrassChunkComplete(next, job.targetTufts)) continue;
 
       const chunk = this.chunks.get(key);
       if (chunk) {
@@ -274,11 +260,29 @@ export class ChunkManager {
     return map;
   }
 
-  private ensureTerrain(chunkX: number, chunkZ: number): void {
+  private ensureTerrain(chunkX: number, chunkZ: number, lodLevel: LodTier): void {
     const key = chunkKey(chunkX, chunkZ);
-    if (this.chunks.has(key)) return;
+    const existing = this.chunks.get(key);
 
-    const terrain = createTerrainChunk(chunkX, chunkZ);
+    if (existing) {
+      if (existing.lodLevel === lodLevel) return;
+      // Lod changed: dispose old terrain mesh & physics body and recreate at new lodLevel
+      this.scene.remove(existing.terrain.mesh);
+      disposeTerrainChunk(existing.terrain);
+
+      const terrain = createTerrainChunk(chunkX, chunkZ, lodLevel);
+      const puddleMap = this.getOrCreatePuddleMap(chunkX, chunkZ);
+      bindTerrainPuddleMap(
+        terrain.mesh.material as THREE.MeshStandardMaterial,
+        puddleMap
+      );
+      this.scene.add(terrain.mesh);
+      existing.terrain = terrain;
+      existing.lodLevel = lodLevel;
+      return;
+    }
+
+    const terrain = createTerrainChunk(chunkX, chunkZ, lodLevel);
     const puddleMap = this.getOrCreatePuddleMap(chunkX, chunkZ);
     bindTerrainPuddleMap(
       terrain.mesh.material as THREE.MeshStandardMaterial,
@@ -286,6 +290,9 @@ export class ChunkManager {
     );
     this.scene.add(terrain.mesh);
     this.chunks.set(key, {
+      chunkX,
+      chunkZ,
+      lodLevel,
       terrain,
       grass: null,
       grassMaterial: null,
@@ -364,21 +371,26 @@ export class ChunkManager {
     chunk.bushes = null;
   }
 
-  private ensureGrass(chunkX: number, chunkZ: number): void {
+  private ensureGrass(chunkX: number, chunkZ: number, targetTufts: number): void {
     const key = chunkKey(chunkX, chunkZ);
     const chunk = this.chunks.get(key);
-    if (!chunk || chunk.grass || this.grassBuilds.has(key)) return;
+    if (!chunk) return;
+
+    if (chunk.grass && chunk.grass.count >= targetTufts) return;
+    if (this.grassBuilds.has(key)) return;
 
     const crushMap = this.getOrCreateCrushMap(chunkX, chunkZ);
-    const material = createGrassMaterialForChunk(crushMap);
-    const { mesh, grid, centerX, centerZ } = beginGrassChunk(
+    const material = chunk.grassMaterial || createGrassMaterialForChunk(crushMap);
+    const { mesh, grid, centerX, centerZ, prng } = beginGrassChunk(
       chunkX,
       chunkZ,
       material
     );
 
-    mesh.renderOrder = 0;
-    this.scene.add(mesh);
+    if (!chunk.grass) {
+      mesh.renderOrder = 0;
+      this.scene.add(mesh);
+    }
 
     const firstEnd = buildGrassTuftBatch(
       mesh,
@@ -386,10 +398,12 @@ export class ChunkManager {
       centerX,
       centerZ,
       0,
-      GRASS_BUILD_BATCH
+      GRASS_BUILD_BATCH,
+      prng,
+      targetTufts
     );
 
-    if (isGrassChunkComplete(firstEnd)) {
+    if (isGrassChunkComplete(firstEnd, targetTufts)) {
       chunk.grass = mesh;
       chunk.grassMaterial = material;
       this.ensureBushes(chunkX, chunkZ);
@@ -404,7 +418,9 @@ export class ChunkManager {
       grid,
       centerX,
       centerZ,
+      prng,
       index: firstEnd,
+      targetTufts,
     });
   }
 

@@ -1,6 +1,7 @@
 import { getLandToBeachMix } from './beach';
+import { getRoadFactor } from './road';
 
-/** Where grass grows vs open sand (deterministic from world XZ). */
+/** Where grass grows vs open sand/road (deterministic from world XZ). */
 
 function hash2(x: number, z: number): number {
   const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
@@ -28,20 +29,20 @@ function valueNoise(x: number, z: number): number {
   );
 }
 
-/** 0 = bare sand, 1 = lush grass patch. */
+/** 0 = bare sand/road, 1 = lush grass patch. */
 export function grassDensity(worldX: number, worldZ: number): number {
-  const a = valueNoise(worldX * 0.07, worldZ * 0.07);
-  const b = valueNoise(worldX * 0.11 + 40, worldZ * 0.11 - 20);
-  return a * 0.65 + b * 0.35;
+  const a = valueNoise(worldX * 0.05, worldZ * 0.05);
+  const b = valueNoise(worldX * 0.09 + 40, worldZ * 0.09 - 20);
+  return a * 0.6 + b * 0.4;
 }
 
 export function hasGrass(worldX: number, worldZ: number): boolean {
   if (getLandToBeachMix(worldX) > 0.04) return false;
-  return grassDensity(worldX, worldZ) > 0.44;
+  if (getRoadFactor(worldX, worldZ) > 0.22) return false;
+  return grassDensity(worldX, worldZ) > 0.12;
 }
 
 export function isOpenGround(worldX: number, worldZ: number): boolean {
   if (getLandToBeachMix(worldX) > 0.04) return false;
   return !hasGrass(worldX, worldZ);
 }
-

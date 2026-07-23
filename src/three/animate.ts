@@ -83,7 +83,6 @@ export function startAnimationLoop(
   beachCoast: BeachCoast
 ) {
   const world = getWorld();
-  world.timestep = 1 / 60;
 
   const controller = new CarController(
     car.body,
@@ -104,28 +103,50 @@ export function startAnimationLoop(
   const cameraInput = new ChaseCameraInput(renderer.domElement);
   new WeatherInput(weather);
 
+  const fpsCounterEl = document.getElementById('fps-counter');
+  let frameCount = 0;
+  let lastFpsTime = performance.now();
+  let lastTime = performance.now();
+
   function animate() {
     requestAnimationFrame(animate);
 
-    const dt = world.timestep;
+    const now = performance.now();
+    let frameDt = (now - lastTime) * 0.001;
+    lastTime = now;
 
-    input.applyInput(dt);
+    if (frameDt <= 0 || isNaN(frameDt)) frameDt = 1 / 60;
+    const clampedDt = Math.min(Math.max(frameDt, 0.001), 0.033);
+
+    frameCount++;
+    if (now - lastFpsTime >= 400) {
+      const fps = Math.round((frameCount * 1000) / (now - lastFpsTime));
+      if (fpsCounterEl) {
+        fpsCounterEl.textContent = `${fps} FPS`;
+      }
+      frameCount = 0;
+      lastFpsTime = now;
+    }
+
+    world.timestep = clampedDt;
+
+    input.applyInput(clampedDt);
     world.step();
-    input.afterPhysics(dt);
+    input.afterPhysics(clampedDt);
+
     syncCar(car);
     car.lights.update(weather.getRainIntensity(), controller.isBraking());
 
     const pos = car.body.translation();
-    const vel = car.body.linvel();
 
-    chunkManager.update(pos.x, pos.z, vel.x, vel.z);
-    const timeSec = performance.now() * 0.001;
+    chunkManager.update(pos.x, pos.z);
+    const timeSec = now * 0.001;
 
-    weather.update(dt, camera, (x, z, amount) => {
+    weather.update(clampedDt, camera, (x, z, amount) => {
       chunkManager.addPuddleWater(x, z, amount);
     });
     chunkManager.updatePuddles(
-      dt,
+      clampedDt,
       pos.x,
       pos.z,
       weather.getRainIntensity(),
@@ -135,7 +156,7 @@ export function startAnimationLoop(
 
     updateGrassEffects(chunkManager, car, timeSec, weather.getGrassWindScale());
     beachCoast.update(timeSec, pos.z, weather.state.fogColor);
-    updateChaseCamera(camera, car, cameraInput, dt);
+    updateChaseCamera(camera, car, cameraInput, clampedDt);
 
     renderer.render(scene, camera);
   }

@@ -7,36 +7,41 @@ import {
   isInOcean,
 } from './beach';
 import { getTerrainHeight, TERRAIN_BASE_Y } from './terrainHeight';
+import { getRoadFactor, getRoadRutFactor } from './road';
 import { createTerrainBlendMaterial } from '../shaders/terrainSurface';
 import {
-  CHUNK_SEGMENTS,
   CHUNK_SIZE,
+  LOD_CONFIG,
   chunkWorldCenter,
+  type LodTier,
 } from './chunkConfig';
 import { getWorld } from '../physics/world';
 
 const _mudColor = new THREE.Color(0xffffff);
-const _sandColor = new THREE.Color(0xf2e0b8);
-const _wetColor = new THREE.Color(0xc8b888);
-const _shallowSeaColor = new THREE.Color(0x6a9a8e);
-const _underColor = new THREE.Color(0x3d6a62);
+const _sandColor = new THREE.Color(0xc8b898);
+const _wetColor = new THREE.Color(0x7a6d58);
+const _shallowSeaColor = new THREE.Color(0x4a7a72);
+const _underColor = new THREE.Color(0x284a44);
 
 export type TerrainChunk = {
   chunkX: number;
   chunkZ: number;
+  lodLevel: LodTier;
   mesh: THREE.Mesh;
-  body: RAPIER.RigidBody;
+  body: RAPIER.RigidBody | null;
 };
 
 export function createTerrainChunk(
   chunkX: number,
-  chunkZ: number
+  chunkZ: number,
+  lodLevel: LodTier = 0
 ): TerrainChunk {
+  const segments = LOD_CONFIG[lodLevel].segments;
   const geometry = new THREE.PlaneGeometry(
     CHUNK_SIZE,
     CHUNK_SIZE,
-    CHUNK_SEGMENTS,
-    CHUNK_SEGMENTS
+    segments,
+    segments
   );
 
   const { x: centerX, z: centerZ } = chunkWorldCenter(chunkX, chunkZ);
@@ -48,6 +53,8 @@ export function createTerrainChunk(
   const colors = new Float32Array(positions.count * 3);
   const sandMix = new Float32Array(positions.count);
   const wetMix = new Float32Array(positions.count);
+  const roadMix = new Float32Array(positions.count);
+  const rutMix = new Float32Array(positions.count);
   let maxSand = 0;
 
   for (let i = 0; i < positions.count; i++) {
@@ -66,6 +73,8 @@ export function createTerrainChunk(
 
     sandMix[i] = landMix;
     wetMix[i] = shoreMix;
+    roadMix[i] = getRoadFactor(worldX, worldZ);
+    rutMix[i] = getRoadRutFactor(worldX, worldZ);
 
     if (isInOcean(worldX, worldY, worldZ)) {
       const depth = BEACH_WATER_WORLD_Y - worldY;
@@ -91,6 +100,8 @@ export function createTerrainChunk(
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geometry.setAttribute('aSandMix', new THREE.BufferAttribute(sandMix, 1));
   geometry.setAttribute('aWetMix', new THREE.BufferAttribute(wetMix, 1));
+  geometry.setAttribute('aRoadMix', new THREE.BufferAttribute(roadMix, 1));
+  geometry.setAttribute('aRutMix', new THREE.BufferAttribute(rutMix, 1));
   geometry.computeVertexNormals();
 
   const material = createTerrainBlendMaterial();
@@ -100,39 +111,47 @@ export function createTerrainChunk(
   mesh.receiveShadow = true;
   mesh.castShadow = false;
 
-  const world = getWorld();
-  const nrows = CHUNK_SEGMENTS;
-  const ncols = CHUNK_SEGMENTS;
-  const heights = new Float32Array((nrows + 1) * (ncols + 1));
+  let body: RAPIER.RigidBody | null = null;
+  const config = LOD_CONFIG[lodLevel];
 
-  for (let col = 0; col <= ncols; col++) {
-    for (let row = 0; row <= nrows; row++) {
-      const worldX = originX + (col / ncols) * CHUNK_SIZE;
-      const worldZ = originZ + (row / nrows) * CHUNK_SIZE;
-      const index = row + col * (nrows + 1);
-      heights[index] = getTerrainHeight(worldX, -worldZ);
+  if (config.hasPhysics) {
+    const world = getWorld();
+    const nrows = segments;
+    const ncols = segments;
+    const heights = new Float32Array((nrows + 1) * (ncols + 1));
+
+    for (let col = 0; col <= ncols; col++) {
+      for (let row = 0; row <= nrows; row++) {
+        const worldX = originX + (col / ncols) * CHUNK_SIZE;
+        const worldZ = originZ + (row / nrows) * CHUNK_SIZE;
+        const index = row + col * (nrows + 1);
+        heights[index] = getTerrainHeight(worldX, -worldZ);
+      }
     }
+
+    body = world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(centerX, TERRAIN_BASE_Y, centerZ)
+    );
+
+    world.createCollider(
+      RAPIER.ColliderDesc.heightfield(nrows, ncols, heights, {
+        x: CHUNK_SIZE,
+        y: 1,
+        z: CHUNK_SIZE,
+      }).setFriction(maxSand > 0.35 ? 0.92 : 1.15),
+      body
+    );
   }
 
-  const body = world.createRigidBody(
-    RAPIER.RigidBodyDesc.fixed().setTranslation(centerX, TERRAIN_BASE_Y, centerZ)
-  );
-
-  world.createCollider(
-    RAPIER.ColliderDesc.heightfield(nrows, ncols, heights, {
-      x: CHUNK_SIZE,
-      y: 1,
-      z: CHUNK_SIZE,
-    }).setFriction(maxSand > 0.35 ? 0.92 : 1.15),
-    body
-  );
-
-  return { chunkX, chunkZ, mesh, body };
+  return { chunkX, chunkZ, lodLevel, mesh, body };
 }
 
 export function disposeTerrainChunk(chunk: TerrainChunk): void {
-  const world = getWorld();
-  world.removeRigidBody(chunk.body);
+  if (chunk.body) {
+    const world = getWorld();
+    world.removeRigidBody(chunk.body);
+    chunk.body = null;
+  }
   chunk.mesh.geometry.dispose();
   const mat = chunk.mesh.material as THREE.MeshStandardMaterial;
   mat.map = null;

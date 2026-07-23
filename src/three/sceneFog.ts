@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import type { CarEntity } from '../entities/car/createCar';
 
-/** Matches sky / horizon — hides far water edge. */
-export const FOG_COLOR = 0xc88868;
+/** Far Cry 4 Kyrat alpine mountain sky atmosphere. */
+export const FOG_COLOR = 0x94b8d4;
 
-/** Linear fog: full opacity by ~FOG_FAR units from camera. */
-export const FOG_NEAR = 30;
-export const FOG_FAR = 48;
+/** Linear fog distance thresholds. */
+export const FOG_NEAR = 35;
+export const FOG_FAR = 65;
 
 export function applySceneFog(scene: THREE.Scene): THREE.Fog {
   scene.background = new THREE.Color(FOG_COLOR);
@@ -15,7 +15,6 @@ export function applySceneFog(scene: THREE.Scene): THREE.Fog {
   return fog;
 }
 
-/** Keep thick fog hugging the drive — do not push far plane out while moving. */
 export function updateDrivingFog(fog: THREE.Fog, _car: CarEntity): void {
   fog.near = FOG_NEAR;
   fog.far = FOG_FAR;
