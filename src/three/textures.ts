@@ -1,14 +1,5 @@
 import * as THREE from 'three';
 
-function loadRepeatTexture(path: string, repeat: [number, number]): THREE.Texture {
-  const texture = new THREE.TextureLoader().load(path);
-  texture.repeat.set(repeat[0], repeat[1]);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.magFilter = THREE.NearestFilter;
-  return texture;
-}
-
 function hash2(x: number, y: number): number {
   const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return s - Math.floor(s);
@@ -117,9 +108,6 @@ function createGroundTexture(): THREE.CanvasTexture {
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
-
-export const brickTexture = loadRepeatTexture('/brick.jpeg', [1, 1]);
-export const grassTexture = loadRepeatTexture('/grass.avif', [50, 50]);
 
 export const groundTexture = createGroundTexture();
 

@@ -41,10 +41,10 @@ export type KenneyCarLayout = {
 
 let colormapPromise: Promise<THREE.Texture> | null = null;
 
-function loadColormap(): Promise<THREE.Texture> {
+function loadColormap(manager?: THREE.LoadingManager): Promise<THREE.Texture> {
   if (!colormapPromise) {
     colormapPromise = new Promise((resolve, reject) => {
-      new THREE.TextureLoader().load(
+      new THREE.TextureLoader(manager).load(
         COLORMAP_URL,
         (tex) => {
           tex.colorSpace = THREE.SRGBColorSpace;
@@ -80,8 +80,12 @@ function applyColormapMaterials(root: THREE.Object3D, colormap: THREE.Texture) {
   });
 }
 
-function loadObjWithMtl(objPath: string, mtlPath: string): Promise<THREE.Group> {
-  const mtlLoader = new MTLLoader();
+function loadObjWithMtl(
+  objPath: string,
+  mtlPath: string,
+  manager?: THREE.LoadingManager
+): Promise<THREE.Group> {
+  const mtlLoader = new MTLLoader(manager);
   mtlLoader.setResourcePath(MODEL_BASE);
 
   return new Promise((resolve, reject) => {
@@ -89,7 +93,7 @@ function loadObjWithMtl(objPath: string, mtlPath: string): Promise<THREE.Group> 
       mtlPath,
       (materials) => {
         materials.preload();
-        const objLoader = new OBJLoader();
+        const objLoader = new OBJLoader(manager);
         objLoader.setMaterials(materials);
         objLoader.load(objPath, resolve, undefined, reject);
       },
@@ -211,13 +215,18 @@ function prepareWheelTemplate(template: THREE.Group, targetRadius: number): THRE
 }
 
 export async function loadKenneySuvVisual(
-  colliderYOffset: number
+  colliderYOffset: number,
+  manager?: THREE.LoadingManager
 ): Promise<KenneyCarLayout> {
-  const colormap = await loadColormap();
+  const colormap = await loadColormap(manager);
 
   const [suv, wheelObj] = await Promise.all([
-    loadObjWithMtl(`${MODEL_BASE}suv.obj`, `${MODEL_BASE}suv.mtl`),
-    loadObjWithMtl(`${MODEL_BASE}wheel-default.obj`, `${MODEL_BASE}wheel-default.mtl`),
+    loadObjWithMtl(`${MODEL_BASE}suv.obj`, `${MODEL_BASE}suv.mtl`, manager),
+    loadObjWithMtl(
+      `${MODEL_BASE}wheel-default.obj`,
+      `${MODEL_BASE}wheel-default.mtl`,
+      manager
+    ),
   ]);
 
   applyColormapMaterials(suv, colormap);

@@ -19,7 +19,9 @@ export type CarEntity = {
   steeringWheelIndices: number[];
 };
 
-export async function createCar(): Promise<CarEntity> {
+export async function createCar(
+  manager?: THREE.LoadingManager
+): Promise<CarEntity> {
   const world = getWorld();
   const {
     driveFrontAxleIndices,
@@ -36,7 +38,7 @@ export async function createCar(): Promise<CarEntity> {
     suspension,
   } = CAR_CONFIG;
 
-  const layout = await loadKenneySuvVisual(colliderYOffset);
+  const layout = await loadKenneySuvVisual(colliderYOffset, manager);
   const { chassisSize, physicsWheelPositions, wheelRadius } = layout;
 
   const spawnY = getWorldTerrainY(spawn.x, spawn.z) + spawn.clearance;

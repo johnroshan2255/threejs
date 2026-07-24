@@ -9,12 +9,95 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  background: #0c1210;
 }
 
 canvas {
   display: block;
   touch-action: none;
   user-select: none;
+}
+
+#loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 35%, rgba(62, 92, 58, 0.35), transparent 70%),
+    linear-gradient(180deg, #152018 0%, #0c1210 55%, #08100c 100%);
+  color: #e8efe4;
+  transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+
+#loading-screen.loading-screen--hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loading-screen__inner {
+  width: min(320px, calc(100% - 48px));
+  text-align: center;
+}
+
+.loading-screen__title {
+  font: 700 34px/1.1 'Trebuchet MS', 'Segoe UI', sans-serif;
+  letter-spacing: 0.04em;
+  margin-bottom: 28px;
+}
+
+.loading-screen__status {
+  font: 400 14px/1.4 system-ui, sans-serif;
+  color: rgba(232, 239, 228, 0.72);
+  margin-bottom: 14px;
+  min-height: 1.4em;
+}
+
+.loading-progress {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.loading-progress__bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #6f9a5a, #c4d89a);
+  transition: width 0.2s ease;
+}
+
+.start-game-btn {
+  margin-top: 8px;
+  min-width: 160px;
+  padding: 14px 28px;
+  border: 1px solid rgba(196, 216, 154, 0.55);
+  border-radius: 10px;
+  background: rgba(78, 112, 64, 0.85);
+  color: #f4f8ef;
+  font: 600 16px/1 system-ui, sans-serif;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+.start-game-btn:hover {
+  background: rgba(96, 132, 78, 0.95);
+  border-color: rgba(220, 236, 180, 0.8);
+}
+
+.start-game-btn:active {
+  transform: translateY(1px);
+}
+
+.start-game-btn:focus-visible {
+  outline: 2px solid #c4d89a;
+  outline-offset: 3px;
 }
 
 #controls-hint {

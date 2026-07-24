@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { PhysicsObject } from '../../physics/physics';
 import { getWorld } from '../../physics/world';
-import { grassTexture } from '../textures';
+import { groundTexture } from '../textures';
 
 export function createFloor(): PhysicsObject {
   const world = getWorld();
@@ -13,7 +13,7 @@ export function createFloor(): PhysicsObject {
       25,
       25
     ),
-    new THREE.MeshStandardMaterial({ map: grassTexture })
+    new THREE.MeshStandardMaterial({ map: groundTexture })
   );
   
   mesh.rotation.x = -Math.PI / 2;

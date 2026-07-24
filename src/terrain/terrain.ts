@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { PhysicsObject } from '../physics/physics';
-import { grassTexture } from '../three/textures';
+import { groundTexture } from '../three/textures';
 import { CHUNK_SIZE } from './chunkConfig';
 import { getTerrainHeight, TERRAIN_BASE_Y } from './terrainHeight';
 import { getWorld } from '../physics/world';
@@ -36,7 +36,7 @@ export function createTerrain(): PhysicsObject {
   const mesh = new THREE.Mesh(
     geometry,
     new THREE.MeshStandardMaterial({
-      map: grassTexture,
+      map: groundTexture,
     })
   );
 

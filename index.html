@@ -14,6 +14,25 @@
     <title>my-three-app</title>
   </head>
   <body>
+    <div id="loading-screen" aria-live="polite">
+      <div class="loading-screen__inner">
+        <p class="loading-screen__title">Open Field</p>
+        <p id="loading-status" class="loading-screen__status">Starting…</p>
+        <div id="loading-progress" class="loading-progress">
+          <div
+            id="loading-bar"
+            class="loading-progress__bar"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          ></div>
+        </div>
+        <button id="start-game-btn" class="start-game-btn" type="button" hidden>
+          Start Game
+        </button>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
