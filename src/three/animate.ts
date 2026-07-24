@@ -147,8 +147,6 @@ export function startAnimationLoop(
     });
     chunkManager.updatePuddles(
       clampedDt,
-      pos.x,
-      pos.z,
       weather.getRainIntensity(),
       weather.getEvaporationRate()
     );

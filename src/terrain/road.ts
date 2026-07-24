@@ -3,11 +3,6 @@
  * Generates a smooth winding road spline through the hill terrain.
  */
 
-function hash21(x: number, z: number): number {
-  const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
-  return s - Math.floor(s);
-}
-
 /** Road centerline position for a given Z coordinate (winding S-curves). */
 export function getRoadCenterX(z: number): number {
   const c1 = Math.sin(z * 0.02) * 45;

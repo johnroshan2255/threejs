@@ -139,12 +139,10 @@ export class ChunkManager {
 
   updatePuddles(
     dt: number,
-    worldX: number,
-    worldZ: number,
     rainIntensity: number,
     evaporationRate: number
   ): void {
-    for (const [key, chunk] of this.chunks) {
+    for (const chunk of this.chunks.values()) {
       const map = this.getOrCreatePuddleMap(chunk.chunkX, chunk.chunkZ);
       if (rainIntensity > 0.05) {
         map.addDrizzle(rainIntensity, dt);
